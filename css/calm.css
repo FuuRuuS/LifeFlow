@@ -1,0 +1,316 @@
+/* ==========================================================================
+   LifeFlow — calm.css
+   Wellbeing layer: comfort sizing, calm mode, breathing coach, supportive
+   micro-copy surfaces and thumb-friendly mobile ergonomics.
+   Loaded last so it can gently override the base system.
+   ========================================================================== */
+
+/* ==========================================================================
+   1. Comfort text scale  (Profile → Comfort & calm)
+   ========================================================================== */
+:root { --scale: 1; }
+[data-scale='lg'] { --scale: 1.08; }
+[data-scale='xl'] { --scale: 1.16; }
+
+html { font-size: calc(100% * var(--scale)); }
+
+body {
+  font-size: 0.9375rem;      /* 15px at scale 1, grows with the scale */
+  line-height: 1.62;         /* airier default = calmer reading */
+  letter-spacing: .002em;
+}
+
+p, .row__sub, .task__title, .note__body, .setting__text span { line-height: 1.65; }
+
+/* ==========================================================================
+   2. Calm mode  — softer light, slower motion, kinder colours
+   ========================================================================== */
+[data-calm='on'] {
+  --t-fast: 220ms;
+  --t: 420ms;
+  --t-slow: 720ms;
+  --glow: 0 12px 46px color-mix(in srgb, var(--accent) 12%, transparent);
+  --shadow-sm: 0 2px 10px rgba(0, 0, 0, .18);
+  --shadow: 0 14px 36px rgba(0, 0, 0, .26);
+  --shadow-lg: 0 24px 60px rgba(0, 0, 0, .32);
+  --danger: #e08a7d;   /* terracotta instead of alarm red */
+  --warning: #e8b473;
+  --success: #6fc9a8;
+}
+
+[data-calm='on'] .aurora .blob {
+  opacity: .42;
+  filter: blur(96px) saturate(.78);
+  animation-duration: 46s, 52s, 58s;
+}
+[data-calm='on'] .grain { opacity: .22; }
+
+/* Everything breathes a little slower and sits a little softer */
+[data-calm='on'] .card,
+[data-calm='on'] .hero-card,
+[data-calm='on'] .stat { border-radius: var(--r-xl); }
+
+[data-calm='on'] .card:hover { transform: none; }
+[data-calm='on'] .btn--primary { animation-duration: 14s; }
+[data-calm='on'] .chip--danger { background: color-mix(in srgb, var(--warning) 16%, transparent); color: var(--warning); }
+[data-calm='on'] .confetti { display: none; }
+
+/* Ambient "with you" pulse behind the app in calm mode */
+[data-calm='on'] .aurora::after {
+  content: '';
+  position: absolute;
+  inset: -20%;
+  background: radial-gradient(circle at 50% 42%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 62%);
+  animation: calm-pulse 11s var(--ease-soft) infinite;
+  pointer-events: none;
+}
+
+@keyframes calm-pulse {
+  0%, 100% { opacity: .28; transform: scale(1); }
+  50%      { opacity: .62; transform: scale(1.06); }
+}
+
+/* ==========================================================================
+   3. Breathing coach
+   ========================================================================== */
+.breathe {
+  display: grid;
+  justify-items: center;
+  gap: var(--s-4);
+  padding: var(--s-3) 0 var(--s-2);
+  text-align: center;
+}
+
+.breathe__stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: min(230px, 60vw);
+  aspect-ratio: 1;
+}
+
+/* Static halo rings that hint at the rhythm */
+.breathe__stage::before,
+.breathe__stage::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--accent) 26%, transparent);
+  opacity: .5;
+}
+.breathe__stage::after { inset: 12%; opacity: .32; }
+
+.breathe__orb {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--grad);
+  box-shadow: 0 0 70px color-mix(in srgb, var(--accent) 42%, transparent);
+  transform: scale(.55);
+  opacity: .82;
+  transition:
+    transform var(--phase, 4000ms) cubic-bezier(.37, 0, .63, 1),
+    opacity var(--phase, 4000ms) ease;
+  will-change: transform;
+}
+
+.breathe__orb::after {
+  content: '';
+  position: absolute;
+  inset: 14%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 32% 28%, rgba(255, 255, 255, .5), transparent 62%);
+}
+
+.breathe.is-in    .breathe__orb { transform: scale(1);   opacity: 1; }
+.breathe.is-hold  .breathe__orb { transform: scale(1);   opacity: 1; }
+.breathe.is-out   .breathe__orb { transform: scale(.55); opacity: .78; }
+.breathe.is-idle  .breathe__orb { transform: scale(.68); opacity: .7; }
+
+.breathe__inner {
+  position: absolute;
+  display: grid;
+  gap: 2px;
+  justify-items: center;
+  color: #fff;
+  text-shadow: 0 1px 12px rgba(0, 0, 0, .35);
+  pointer-events: none;
+}
+
+.breathe__phase {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+}
+
+.breathe__count {
+  font-variant-numeric: tabular-nums;
+  font-size: 2rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.breathe__hint {
+  color: var(--text-dim);
+  font-size: .86rem;
+  max-width: 34ch;
+  min-height: 2.6em;
+}
+
+.breathe__meta {
+  display: flex;
+  gap: var(--s-2);
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.breathe__actions {
+  display: flex;
+  gap: var(--s-2);
+  width: 100%;
+  max-width: 320px;
+}
+.breathe__actions .btn { flex: 1; }
+
+/* Full-screen session */
+.breathe-full {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: grid;
+  place-items: center;
+  gap: var(--s-5);
+  padding: calc(var(--s-7) + var(--safe-t)) var(--s-5) calc(var(--s-7) + var(--safe-b));
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(26px) saturate(140%);
+  -webkit-backdrop-filter: blur(26px) saturate(140%);
+  animation: fade-in var(--t) var(--ease);
+}
+
+.breathe-full .breathe__stage { width: min(320px, 74vw); }
+.breathe-full .breathe__hint { font-size: .95rem; }
+
+.breathe-full__close {
+  position: absolute;
+  top: calc(var(--s-5) + var(--safe-t));
+  right: var(--s-5);
+}
+
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+/* ==========================================================================
+   4. Supportive surfaces — mood reply, gratitude, one-thing focus
+   ========================================================================== */
+.mood-reply {
+  display: flex;
+  gap: var(--s-3);
+  align-items: flex-start;
+  margin-top: var(--s-4);
+  padding: var(--s-3) var(--s-4);
+  border-radius: var(--r-md);
+  background: var(--grad-soft);
+  border: 1px solid var(--stroke);
+  animation: fade-up var(--t-slow) var(--ease) both;
+}
+.mood-reply__emoji { font-size: 1.35rem; line-height: 1.3; }
+.mood-reply p { font-size: .9rem; color: var(--text); }
+.mood-reply small { display: block; color: var(--text-dim); margin-top: 2px; }
+
+.one-thing {
+  display: flex;
+  gap: var(--s-3);
+  align-items: center;
+  padding: var(--s-3) var(--s-4);
+  margin-bottom: var(--s-3);
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+  border: 1px dashed color-mix(in srgb, var(--accent) 32%, transparent);
+}
+.one-thing__label {
+  font-size: .68rem;
+  font-weight: 800;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--accent);
+  white-space: nowrap;
+}
+.one-thing__task { font-weight: 700; }
+
+.gratitude__field {
+  display: flex;
+  gap: var(--s-2);
+  align-items: center;
+}
+.gratitude__list {
+  display: grid;
+  gap: var(--s-2);
+  margin-top: var(--s-3);
+}
+.gratitude__item {
+  display: flex;
+  gap: var(--s-2);
+  align-items: flex-start;
+  font-size: .88rem;
+  color: var(--text-dim);
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+}
+
+/* Gentler "needs attention" button */
+.btn--gentle {
+  background: color-mix(in srgb, var(--warning) 14%, transparent);
+  color: var(--warning);
+  border: 1px solid color-mix(in srgb, var(--warning) 26%, transparent);
+}
+.btn--gentle:hover { background: color-mix(in srgb, var(--warning) 22%, transparent); }
+
+.mb-3 { margin-bottom: var(--s-3); }
+
+/* ==========================================================================
+   5. Mobile ergonomics — thumb-friendly targets and calmer density
+   ========================================================================== */
+@media (max-width: 899px) {
+  /* Minimum comfortable touch targets (Apple 44pt / Material 48dp) */
+  .btn { min-height: 48px; padding-inline: var(--s-5); }
+  .btn--sm { min-height: 44px; }
+  .btn--xs { min-height: 38px; }
+  .btn--icon, .iconbtn { min-width: 44px; min-height: 44px; }
+  .check__box, .habit__check { min-width: 32px; min-height: 32px; }
+  .mood { min-height: 68px; }
+  .navbtn { min-height: 52px; }
+  .chip { min-height: 28px; }
+  .swatch { width: 44px; height: 44px; }
+  .switch { transform: scale(1.06); transform-origin: right center; }
+  .cal__day { min-height: 46px; }
+
+  /* Softer rhythm: fewer hard edges, more air between blocks */
+  .card { padding: var(--s-5); border-radius: var(--r-lg); }
+  .page { gap: var(--s-5); }
+  .card__title { font-size: 1rem; }
+
+  /* Keep the last card clear of the floating nav + FAB */
+  .view { padding-bottom: calc(var(--nav-h) + var(--s-9) + var(--safe-b)); }
+
+  /* Primary actions sit in the lower half of the screen where the thumb is */
+  .breathe__actions { max-width: none; }
+
+  /* Long lists stop fighting the scroll */
+  .task, .row, .event, .note { touch-action: pan-y; }
+}
+
+@media (max-width: 420px) {
+  h1 { font-size: 1.65rem; line-height: 1.22; }
+  .hero-card { padding: var(--s-5); }
+  .stat__val { font-size: 1.3rem; }
+}
+
+/* Respect the system preference automatically */
+@media (prefers-reduced-motion: reduce) {
+  .breathe__orb { transition-duration: 60ms; }
+  .aurora::after { animation: none; }
+}
