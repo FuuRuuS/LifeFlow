@@ -164,3 +164,31 @@ person or the computer, which is why every game works in both modes for free.
 - **Quotes** — extend the `QUOTES` array in [js/config.js](js/config.js).
 - **Widgets** — dashboard widgets are toggled from Profile → Dashboard widgets and stored in `prefs.widgets`.
 # 20perecnt
+
+
+
+
+Features (concise)
+
+- Authentication: Email sign-up, sign-in, password reset, email verification, and persistent sessions.
+
+- Profile & Preferences: Per-user profile with display name, photo, bio, and preferences (theme, accent, text scale, week start, focus/break lengths, widgets).
+
+- Tasks: Create, update, reorder, complete/undo tasks, with timestamps and ordering; today/overdue filters and batch reordering.
+
+- Events / Calendar: Create events, appointments, reminders with time/location/notes/duration; list by date and upcoming events.
+
+- Google Calendar Sync: Two-way sync (pull then push), conflict resolution via content signature, and remote-create/patch/delete mirroring.
+
+- Goals: Goals with milestones and progress tracking; computed progress and goal lists by area.
+
+- Savings & Transactions: Savings goals, income/expense transactions, monthly cashflow, and category summaries.
+
+
+- Purchases (Wish-list): Wish-list items that can be marked bought; buying creates linked transactions; edits keep linked txn in sync.
+
+- Prayer Tracker: Daily prayer check-ins (per-day arrays), streaks, remove/clear utilities, and batch deletion of tracker data.
+
+- Badges & Stats: Achievement rules (task counts, streaks, focus sessions, savings milestones) and automatic badge evaluation.
+
+- Archive & Reporting: Monthly summaries (tasks, money, habits, moods, prayers, notes, events, goals) and per-day activity snapshots.
