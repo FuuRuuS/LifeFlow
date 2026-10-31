@@ -1385,7 +1385,10 @@ function currentQuery() {
 function navigate(path, { replace = false } = {}) {
   const target = path.startsWith('#') ? path : `#${path}`;
   if (location.hash === target) { resolve(); return; }
-  if (replace) history.replaceState(null, '', target);
+  if (replace) {
+    history.replaceState(null, '', target);
+    resolve(); // replaceState does not dispatch hashchange (auth/invite redirects).
+  }
   else location.hash = target;
 }
 
@@ -11957,7 +11960,7 @@ return Object.freeze({ meta, render });
 
   /* ===== js/arcade/rooms.js ===== */
   const __m41 = (function () {
-const { db, doc, collection, setDoc, getDoc, updateDoc, deleteDoc, onSnapshot, getDocs, serverTimestamp, runTransaction } = __m7;
+const { db, doc, collection, setDoc, updateDoc, deleteDoc, onSnapshot, getDocs, serverTimestamp, runTransaction } = __m7;
 const store = __m8;
 /**
  * LifeFlow Arcade — remote play over Firestore.
@@ -12052,25 +12055,33 @@ async function joinRoom(code) {
   const who = me();
   if (!who.uid) throw new Error('Sign in to join the game.');
 
-  const snap = await getDoc(roomRef(code));
-  if (!snap.exists()) throw new Error('That game could not be found — the link may have expired.');
+  return runTransaction(db, async (tx) => {
+    const snap = await tx.get(roomRef(code));
+    if (!snap.exists()) throw new Error('That game could not be found — the link may have expired.');
 
-  const data = snap.data();
-  // The host's own tab (or an older room without tab ids) goes back to seat one.
-  if (data.hostUid === who.uid && (!data.hostTab || data.hostTab === TAB)) return { seat: 0, data };
-  if (data.guestUid && data.guestUid !== who.uid) throw new Error('This game already has two players.');
+    const data = snap.data();
+    // The host's own tab (or an older room without tab ids) goes back to seat one.
+    if (data.hostUid === who.uid && (!data.hostTab || data.hostTab === TAB)) return { seat: 0, data };
+    if (data.guestUid && (data.guestUid !== who.uid || (data.guestTab && data.guestTab !== TAB))) {
+      throw new Error('This game already has two players. Leave the other table before joining here.');
+    }
 
-  // Every arrival gets a fresh token — the host reopens the call when it changes.
-  const seated = {
-    guestUid: who.uid,
-    guestTab: TAB,
-    guestJoin: newCode(8),
-    guest: { name: who.name },
-    offer: null,
-    answer: null
-  };
-  await updateDoc(roomRef(code), { ...seated, updatedAt: serverTimestamp() });
-  return { seat: 1, data: { ...data, ...seated } };
+    // Every arrival gets a fresh token — the host reopens the call when it changes.
+    const seated = {
+      guestUid: who.uid,
+      guestTab: TAB,
+      guestJoin: newCode(8),
+      guest: { name: who.name },
+      offer: null,
+      answer: null
+    };
+    const media = { ...data.media, b: { cam: false, mic: false } };
+    const rematch = { ...data.rematch, b: false };
+    tx.update(roomRef(code), {
+      ...seated, 'media.b': media.b, 'rematch.b': false, updatedAt: serverTimestamp()
+    });
+    return { seat: 1, data: { ...data, ...seated, media, rematch } };
+  });
 }
 
 function watchRoom(code, onChange, onGone) {
@@ -12089,12 +12100,19 @@ function watchRoom(code, onChange, onGone) {
 
 /* ------------------------------ play ------------------------------ */
 async function pushState(code, { state, outcome, seq }) {
-  await updateDoc(roomRef(code), {
-    state,
-    outcome: outcome || null,
-    seq,
-    rematch: { a: false, b: false },
-    updatedAt: serverTimestamp()
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(roomRef(code));
+    if (!snap.exists()) throw new Error('The game was closed.');
+    const data = snap.data();
+    if (!data.guestUid) throw new Error('Wait for your friend to rejoin.');
+    if ((data.seq || 0) !== seq - 1) throw new Error('The board changed. Please try your move again.');
+    tx.update(roomRef(code), {
+      state,
+      outcome: outcome || null,
+      seq,
+      rematch: { a: false, b: false },
+      updatedAt: serverTimestamp()
+    });
   });
 }
 
@@ -12106,13 +12124,18 @@ async function pushRematch(code, seat, on) {
 }
 
 async function restart(code, state, seq, round) {
-  await updateDoc(roomRef(code), {
-    state,
-    outcome: null,
-    seq,
-    round,
-    rematch: { a: false, b: false },
-    updatedAt: serverTimestamp()
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(roomRef(code));
+    if (!snap.exists()) throw new Error('The game was closed.');
+    if ((snap.data().seq || 0) !== seq - 1) throw new Error('The board changed. Please try restarting again.');
+    tx.update(roomRef(code), {
+      state,
+      outcome: null,
+      seq,
+      round,
+      rematch: { a: false, b: false },
+      updatedAt: serverTimestamp()
+    });
   });
 }
 
@@ -12177,6 +12200,8 @@ async function leaveRoom(code, seat) {
         guest: null,
         offer: null,
         answer: null,
+        'media.b': { cam: false, mic: false },
+        'rematch.b': false,
         updatedAt: serverTimestamp()
       });
     }
@@ -12262,13 +12287,28 @@ function createCall({ code, seat, onRemote, onLocal, onStatus, onError }) {
   let lastNegotiation = 0;
   let retries = 0;
   let watchdog = null;
+  let recoveryTimer = null;
+  const acquiring = { audio: null, video: null };
+  const wanted = { audio: false, video: false };
+  const deviceVersion = { audio: 0, video: 0 };
+  const senderWork = new WeakMap();
 
-  const status = (s) => onStatus?.(s);
+  const status = (s) => { if (!closed || s === 'closed') onStatus?.(s); };
+  const current = (conn, mySid) => !closed && conn && pc === conn && sid === mySid &&
+    conn.signalingState !== 'closed' && conn.connectionState !== 'closed';
+
+  function fail(context, err) {
+    console.warn('[arcade]', context, err);
+    if (closed) return;
+    status('failed');
+    onError?.(err);
+  }
 
   function attachRemote(track) {
-    if (remote.getTracks().includes(track)) return;
+    if (closed || remote.getTracks().includes(track)) return;
     remote.addTrack(track);
     track.addEventListener('ended', () => {
+      if (closed || !remote.getTracks().includes(track)) return;
       try { remote.removeTrack(track); } catch { /* already gone */ }
       onRemote?.(remote);
     });
@@ -12284,33 +12324,48 @@ function createCall({ code, seat, onRemote, onLocal, onStatus, onError }) {
     watchdog = null;
   }
 
+  function clearRecovery() {
+    if (recoveryTimer) clearTimeout(recoveryTimer);
+    recoveryTimer = null;
+  }
+
   /** Ask for a fresh connection: the host renegotiates, the guest nudges the host. */
   function recover(reason) {
     if (closed) return;
     if (host) {
-      if (Date.now() - lastNegotiation < 3000) return;
-      negotiate().catch((err) => console.warn('[arcade] renegotiate', reason, err));
+      const delay = 3000 - (Date.now() - lastNegotiation);
+      if (delay > 0) {
+        if (!recoveryTimer) recoveryTimer = setTimeout(() => {
+          recoveryTimer = null;
+          recover(reason);
+        }, delay);
+        return;
+      }
+      return negotiate();
     } else {
-      updateDoc(roomRef(code), { rtcKick: newCode(8) }).catch(() => {});
+      return updateDoc(roomRef(code), { rtcKick: newCode(8) })
+        .catch((err) => fail('reconnect request', err));
     }
   }
 
   function scheduleRecovery(conn, delay, reason) {
+    const mySid = sid;
+    if (!current(conn, mySid)) return;
     clearWatchdog();
     if (retries >= AUTO_RETRIES) return;
     watchdog = setTimeout(() => {
       watchdog = null;
-      if (closed || pc !== conn || conn.connectionState === 'connected') return;
+      if (!current(conn, mySid) || conn.connectionState === 'connected') return;
       retries += 1;
       recover(reason);
     }, delay);
   }
 
   function buildPc() {
+    if (closed) return null;
     clearWatchdog();
     if (pc) { try { pc.close(); } catch { /* noop */ } }
     clearRemote();
-    onRemote?.(remote);
     tx.audio = null;
     tx.video = null;
 
@@ -12319,17 +12374,18 @@ function createCall({ code, seat, onRemote, onLocal, onStatus, onError }) {
     pc = conn;
 
     conn.addEventListener('track', (ev) => {
-      if (pc !== conn) return;
+      if (!current(conn, mySid)) return;
       if (ev.track) attachRemote(ev.track);
     });
 
     conn.addEventListener('icecandidate', (ev) => {
-      if (!ev.candidate || closed || pc !== conn) return;
-      addDoc(iceRef(code, seat), packCandidate(ev.candidate, mySid)).catch(() => {});
+      if (!ev.candidate || !current(conn, mySid)) return;
+      addDoc(iceRef(code, seat), packCandidate(ev.candidate, mySid))
+        .catch((err) => console.warn('[arcade] publish candidate', err));
     });
 
     conn.addEventListener('connectionstatechange', () => {
-      if (pc !== conn) return;
+      if (!current(conn, mySid)) return;
       const st = conn.connectionState;
       status(st === 'new' ? 'connecting' : st);
       if (st === 'connected') { retries = 0; clearWatchdog(); }
@@ -12339,29 +12395,60 @@ function createCall({ code, seat, onRemote, onLocal, onStatus, onError }) {
 
     // Never connected at all — try a fresh negotiation once in a while.
     scheduleRecovery(conn, 25000, 'timeout');
+    onRemote?.(remote);
     status('connecting');
     return conn;
   }
 
-  async function addRemoteCandidate(init) {
-    try { await pc.addIceCandidate(new RTCIceCandidate(init)); } catch { /* stale or malformed */ }
+  async function addRemoteCandidate(init, conn = pc, mySid = sid) {
+    if (!current(conn, mySid)) return;
+    try {
+      await conn.addIceCandidate(new RTCIceCandidate(init));
+      if (!current(conn, mySid)) return;
+    } catch (err) { console.warn('[arcade] remote candidate', err); }
   }
 
   /** Feed any queued candidates that belong to the current session. */
-  async function drain() {
-    if (!pc?.remoteDescription) return;
-    const mine = pending.filter((p) => p.sid === sid);
-    pending = pending.filter((p) => p.sid !== sid);
-    for (const p of mine) await addRemoteCandidate(p.init);
+  async function drain(conn = pc, mySid = sid) {
+    if (!current(conn, mySid) || !conn.remoteDescription) return;
+    const mine = pending.filter((p) => p.sid === mySid);
+    pending = pending.filter((p) => p.sid !== mySid);
+    for (const p of mine) {
+      if (!current(conn, mySid)) return;
+      await addRemoteCandidate(p.init, conn, mySid);
+      if (!current(conn, mySid)) return;
+    }
+  }
+
+  /** Order replacements on each reserved lane, including concurrent device toggles. */
+  async function replaceSender(conn, mySid, sender, kind, track) {
+    const previous = senderWork.get(sender);
+    const work = (async () => {
+      // A previous caller reports its own error; it must not block later replacements.
+      if (previous) await previous.catch(() => {});
+      if (!current(conn, mySid)) return;
+      if (track && (track.readyState !== 'live' || !local?.getTracks().includes(track))) return;
+      if (!track && local?.getTracks().some((t) => t.kind === kind && t.readyState === 'live')) return;
+      if (sender.track !== track) {
+        await sender.replaceTrack(track);
+        if (!current(conn, mySid)) return;
+      }
+    })();
+    senderWork.set(sender, work);
+    try { await work; }
+    finally { if (senderWork.get(sender) === work) senderWork.delete(sender); }
   }
 
   /** Push any tracks we already hold into the freshly negotiated senders. */
-  async function flushSenders() {
-    if (!local) return;
+  async function flushSenders(conn = pc, mySid = sid) {
+    if (!current(conn, mySid) || !local) return;
+    const senders = { audio: tx.audio?.sender, video: tx.video?.sender };
     for (const track of local.getTracks()) {
-      const sender = tx[track.kind]?.sender;
-      if (sender && sender.track !== track) {
-        try { await sender.replaceTrack(track); } catch { /* lane not ready */ }
+      if (!current(conn, mySid)) return;
+      const sender = senders[track.kind];
+      if (sender) {
+        await replaceSender(conn, mySid, sender, track.kind, track);
+        if (!current(conn, mySid)) return;
       }
     }
   }
@@ -12376,6 +12463,7 @@ function createCall({ code, seat, onRemote, onLocal, onStatus, onError }) {
       onSnapshot(
         iceRef(code, host ? 1 : 0),
         (snap) => {
+          if (closed) return;
           snap.docChanges().forEach((change) => {
             if (change.type !== 'added') return;
             const d = change.doc.data();
@@ -12386,21 +12474,15 @@ function createCall({ code, seat, onRemote, onLocal, onStatus, onError }) {
           });
           if (pending.length > 300) pending = pending.slice(-300);
         },
-        (err) => console.warn('[arcade] ice', err)
+        (err) => fail('ice subscription', err)
       )
     );
 
     // Offers, answers and reconnect requests travel on the room document.
-    unsubs.push(onSnapshot(roomRef(code), (snap) => onRoom(snap.data()), (err) => console.warn('[arcade] signal', err)));
+    unsubs.push(onSnapshot(roomRef(code), (snap) => onRoom(snap.data()), (err) => fail('signal subscription', err)));
 
-    if (host) {
-      try { await negotiate(); }
-      catch (err) {
-        console.warn('[arcade] call', err);
-        onError?.(err);
-        status('failed');
-      }
-    }
+    if (host) await negotiate();
+    else await recover('guest start'); // A reload cannot reuse the host's already-answered offer.
   }
 
   function onRoom(data) {
@@ -12410,10 +12492,15 @@ function createCall({ code, seat, onRemote, onLocal, onStatus, onError }) {
       const a = data.answer;
       if (a?.sdp && a.sid === sid && a.sdp !== seenAnswer && pc?.signalingState === 'have-local-offer') {
         seenAnswer = a.sdp;
+        const conn = pc;
         const mySid = sid;
-        pc.setRemoteDescription({ type: 'answer', sdp: a.sdp })
-          .then(() => { if (sid === mySid) return drain(); })
-          .catch((err) => console.warn('[arcade] answer', err));
+        conn.setRemoteDescription({ type: 'answer', sdp: a.sdp })
+          .then(() => { if (current(conn, mySid)) return drain(conn, mySid); })
+          .catch((err) => {
+            if (!current(conn, mySid)) return;
+            seenAnswer = '';
+            fail('answer', err);
+          });
       }
       // The guest pressed "Reconnect" (or its side gave up).
       const kick = data.rtcKick || '';
@@ -12432,58 +12519,79 @@ function createCall({ code, seat, onRemote, onLocal, onStatus, onError }) {
   /** Host: a brand-new connection, reusing whatever camera/mic is already on. */
   async function negotiate() {
     if (!host || closed) return;
+    clearRecovery();
     lastNegotiation = Date.now();
     sid = newCode(10);
     const mySid = sid;
     seenAnswer = '';
     pending = [];
 
-    const conn = buildPc();
-    // Reserve both lanes up front so tracks can be swapped in later.
-    tx.audio = conn.addTransceiver('audio', { direction: 'sendrecv' });
-    tx.video = conn.addTransceiver('video', { direction: 'sendrecv' });
-    await flushSenders();
+    let conn;
+    try {
+      conn = buildPc();
+      if (!current(conn, mySid)) return;
+      // Reserve both lanes up front so tracks can be swapped in later.
+      tx.audio = conn.addTransceiver('audio', { direction: 'sendrecv' });
+      tx.video = conn.addTransceiver('video', { direction: 'sendrecv' });
+      await flushSenders(conn, mySid);
+      if (!current(conn, mySid)) return;
 
-    const desc = await conn.createOffer();
-    if (sid !== mySid || closed) return;
-    await conn.setLocalDescription(desc);
-    await updateDoc(roomRef(code), { offer: { type: desc.type, sdp: desc.sdp, sid: mySid }, answer: null });
-    sweep(mySid);
+      const desc = await conn.createOffer();
+      if (!current(conn, mySid)) return;
+      await conn.setLocalDescription(desc);
+      if (!current(conn, mySid)) return;
+      await updateDoc(roomRef(code), { offer: { type: desc.type, sdp: desc.sdp, sid: mySid }, answer: null });
+      if (!current(conn, mySid)) return;
+      sweep(conn, mySid);
+    } catch (err) {
+      if (current(conn, mySid) || (!conn && !closed && sid === mySid)) fail('offer negotiation', err);
+      else console.warn('[arcade] stale offer negotiation', err);
+    }
   }
 
   /** Guest: answer the host's latest offer on a fresh connection. */
   async function answerOffer(o) {
+    if (closed) return;
     sid = o.sid;
     const mySid = sid;
     pending = pending.filter((p) => p.sid === mySid);
 
-    const conn = buildPc();
+    let conn;
     try {
+      conn = buildPc();
+      if (!current(conn, mySid)) return;
       await conn.setRemoteDescription({ type: 'offer', sdp: o.sdp });
-      if (sid !== mySid || closed) return;
+      if (!current(conn, mySid)) return;
       conn.getTransceivers().forEach((t) => { t.direction = 'sendrecv'; });
       tx.audio = conn.getTransceivers().find((t) => t.receiver?.track?.kind === 'audio') || null;
       tx.video = conn.getTransceivers().find((t) => t.receiver?.track?.kind === 'video') || null;
-      await flushSenders();
-      await drain();
+      await flushSenders(conn, mySid);
+      if (!current(conn, mySid)) return;
+      await drain(conn, mySid);
+      if (!current(conn, mySid)) return;
 
       const desc = await conn.createAnswer();
-      if (sid !== mySid || closed) return;
+      if (!current(conn, mySid)) return;
       await conn.setLocalDescription(desc);
+      if (!current(conn, mySid)) return;
       await updateDoc(roomRef(code), { answer: { type: desc.type, sdp: desc.sdp, sid: mySid } });
+      if (!current(conn, mySid)) return;
     } catch (err) {
-      console.warn('[arcade] offer', err);
-      if (sid === mySid) status('failed');
+      if (current(conn, mySid) || (!conn && !closed && sid === mySid)) fail('answer negotiation', err);
+      else console.warn('[arcade] stale answer negotiation', err);
     }
   }
 
   /** Best effort: clear candidates left over from older sessions. */
-  async function sweep(keepSid) {
+  async function sweep(conn, keepSid) {
     for (const lane of [0, 1]) {
+      if (!current(conn, keepSid)) return;
       try {
         const snap = await getDocs(iceRef(code, lane));
+        if (!current(conn, keepSid)) return;
         await Promise.all(snap.docs.filter((d) => d.data()?.sid !== keepSid).map((d) => deleteDoc(d.ref)));
-      } catch { /* not important */ }
+        if (!current(conn, keepSid)) return;
+      } catch (err) { console.warn('[arcade] candidate cleanup', err); }
     }
   }
 
@@ -12495,60 +12603,125 @@ function createCall({ code, seat, onRemote, onLocal, onStatus, onError }) {
   }
 
   /* ------------------------------ devices ------------------------------ */
-  async function acquire(kind) {
+  function acquire(kind) {
+    if (closed || !wanted[kind]) return Promise.resolve(null);
+    if (acquiring[kind]) return acquiring[kind];
     const existing = local?.getTracks().find((t) => t.kind === kind && t.readyState === 'live');
-    if (existing) return existing;
+    if (existing) return Promise.resolve(existing);
 
     const constraints =
       kind === 'video'
         ? { video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' } }
         : { audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } };
 
-    const stream = await navigator.mediaDevices.getUserMedia(constraints);
-    const track = stream.getTracks()[0];
-    if (!local) local = new MediaStream();
-    local.addTrack(track);
+    const work = (async () => {
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      // Permission prompts may resolve after an off toggle or after the call is gone.
+      if (closed || !wanted[kind]) {
+        stream.getTracks().forEach((t) => t.stop());
+        return null;
+      }
+      const track = stream.getTracks().find((t) => t.kind === kind && t.readyState === 'live');
+      stream.getTracks().forEach((t) => { if (t !== track) t.stop(); });
+      if (!track) throw new Error(`No live ${kind} track was provided.`);
+      if (!local) local = new MediaStream();
+      local.getTracks().filter((t) => t.kind === kind).forEach((t) => {
+        t.stop();
+        local.removeTrack(t);
+      });
+      local.addTrack(track);
 
-    const sender = tx[kind]?.sender;
-    if (sender) await sender.replaceTrack(track);
-    onLocal?.(local);
-    return track;
+      const conn = pc;
+      const mySid = sid;
+      const sender = tx[kind]?.sender;
+      try {
+        if (sender) await replaceSender(conn, mySid, sender, kind, track);
+      } catch (err) {
+        if (current(conn, mySid)) {
+          track.stop();
+          local?.removeTrack(track);
+          onLocal?.(local);
+          throw err;
+        }
+        console.warn('[arcade] stale device sender', err);
+      }
+      if (closed || !local?.getTracks().includes(track) || track.readyState !== 'live') return null;
+      onLocal?.(local);
+      return track;
+    })();
+    acquiring[kind] = work.catch((err) => {
+      if (closed || !wanted[kind]) return null;
+      throw err;
+    }).finally(() => { acquiring[kind] = null; });
+    return acquiring[kind];
   }
 
   function drop(kind) {
-    const track = local?.getTracks().find((t) => t.kind === kind);
-    if (track) {
+    local?.getTracks().filter((t) => t.kind === kind).forEach((track) => {
       track.stop();
       local.removeTrack(track);
-    }
-    tx[kind]?.sender?.replaceTrack(null).catch(() => {});
-    onLocal?.(local);
+    });
+    const conn = pc;
+    const mySid = sid;
+    const sender = tx[kind]?.sender;
+    if (sender) replaceSender(conn, mySid, sender, kind, null).catch((err) => {
+      if (current(conn, mySid)) fail('detach device', err);
+    });
+    if (!closed) onLocal?.(local);
   }
 
   /** Camera off releases the device outright, so the little light goes out too. */
   async function setCam(on) {
-    if (on) { await acquire('video'); cam = true; }
-    else { drop('video'); cam = false; }
+    if (closed) return false;
+    wanted.video = Boolean(on);
+    const version = ++deviceVersion.video;
+    if (on) {
+      let track = await acquire('video');
+      if (closed || version !== deviceVersion.video) return cam;
+      // An off/on pair may have shared an acquisition whose track was already dropped.
+      if (!track) {
+        track = await acquire('video');
+        if (closed || version !== deviceVersion.video) return cam;
+      }
+      cam = Boolean(track && track.readyState === 'live');
+    } else {
+      cam = false;
+      drop('video');
+    }
     return cam;
   }
 
   /** Mute is instant — the track stays open so unmuting never stutters. */
   async function setMic(on) {
+    if (closed) return false;
+    wanted.audio = Boolean(on);
+    const version = ++deviceVersion.audio;
     if (on) {
-      const track = await acquire('audio');
+      let track = await acquire('audio');
+      if (closed || version !== deviceVersion.audio) return mic;
+      if (!track) {
+        track = await acquire('audio');
+        if (closed || version !== deviceVersion.audio) return mic;
+      }
+      if (!track || track.readyState !== 'live') return mic;
       track.enabled = true;
       mic = true;
     } else {
-      const track = local?.getTracks().find((t) => t.kind === 'audio');
-      if (track) track.enabled = false;
+      local?.getAudioTracks().forEach((track) => { track.enabled = false; });
       mic = false;
     }
     return mic;
   }
 
   function close() {
+    if (closed) return;
     closed = true;
     clearWatchdog();
+    clearRecovery();
+    wanted.audio = wanted.video = false;
+    deviceVersion.audio += 1;
+    deviceVersion.video += 1;
+    cam = mic = false;
     unsubs.forEach((u) => { try { u(); } catch { /* already off */ } });
     unsubs.length = 0;
     local?.getTracks().forEach((t) => t.stop());
@@ -12556,6 +12729,10 @@ function createCall({ code, seat, onRemote, onLocal, onStatus, onError }) {
     local = null;
     try { pc?.close(); } catch { /* noop */ }
     pc = null;
+    tx.audio = tx.video = null;
+    pending = [];
+    onLocal?.(null);
+    onRemote?.(remote);
     status('closed');
   }
 
@@ -12653,7 +12830,6 @@ function teardown({ leaveTable = true } = {}) {
   s.timers?.forEach((t) => clearTimeout(t));
   try { s.unsub?.(); } catch { /* already off */ }
   try { s.call?.close(); } catch { /* already closed */ }
-  window.removeEventListener('beforeunload', s.onUnload);
   if (leaveTable && s.mode === 'remote' && s.code) rooms.leaveRoom(s.code, s.seat);
 }
 
@@ -12939,11 +13115,13 @@ function openRoom({ code, game, seat, state, level, room }) {
     media: { cam: false, mic: false },
     peerMedia: { cam: false, mic: false },
     status: 'waiting',
-    timers: [],
-    onUnload: () => rooms.leaveRoom(code, seat)
+    timers: []
   };
 
-  window.addEventListener('beforeunload', session.onUnload);
+  // A reload must not delete the host's room or evict the returning guest.
+  // Only an explicit leave/navigation releases the seat.
+  history.replaceState(null, '', `#/games?room=${encodeURIComponent(code)}`);
+  lastQuery = `${code}|`;
   session.unsub = rooms.watchRoom(code, onRoomChange, onRoomGone);
   repaint();
 }
@@ -12960,8 +13138,10 @@ function onRoomChange(data) {
   s.names = [data.host?.name || 'Host', data.guest?.name || ''];
   s.peerMedia = data.media?.[rooms.SEAT_KEYS[1 - s.seat]] || { cam: false, mic: false };
 
-  if ((data.seq || 0) !== s.seq) {
+  const seatingChanged = wasSeated !== Boolean(data.guestUid);
+  if ((data.seq || 0) !== s.seq || seatingChanged) {
     s.seq = data.seq || 0;
+    s.round = data.round || 0;
     s.state = data.state;
     clearTimers();
     paintBoard();
@@ -12980,6 +13160,15 @@ function onRoomChange(data) {
     if (!s.call) startCall();
     else if (s.seat === 0 && join !== s.joinSeen) s.call.reconnect();
     s.joinSeen = join;
+  } else if (s.call) {
+    s.call.close();
+    s.call = null;
+    s.media = { cam: false, mic: false };
+    s.peerMedia = { cam: false, mic: false };
+    s.joinSeen = '';
+    s.status = 'waiting';
+    rooms.pushMedia(s.code, s.seat, s.media).catch(() => {});
+    syncDock();
   }
 
   if (data.guestUid && !wasSeated && s.seat === 0) toast(`${data.guest?.name || 'Your friend'} joined.`, 'success');
@@ -13000,10 +13189,10 @@ function onRoomChange(data) {
 function onRoomGone(err) {
   if (!session || session.mode !== 'remote') return;
   toast(err ? roomError(err, 'Lost the connection to the game.') : 'The game was closed.', err ? 'error' : 'info', err ? 6000 : 3000);
-  const s = session;
   teardown({ leaveTable: false });
-  if (s.seat === 1) navigate('/games', { replace: true });
-  else repaint();
+  lastQuery = '';
+  navigate('/games', { replace: true });
+  repaint();
 }
 
 /* =========================================================
@@ -13024,7 +13213,7 @@ function context() {
   const local = isLocal();
   return {
     seat: local ? s.game.turn(s.state) : s.seat,
-    myTurn: !out.over && bothSeated() && (local || s.game.turn(s.state) === s.seat),
+    myTurn: !s.saving && !out.over && bothSeated() && (local || s.game.turn(s.state) === s.seat),
     local,
     over: out.over,
     names: s.names,
@@ -13043,26 +13232,36 @@ function play(move) {
   commit(move);
 }
 
-function commit(move) {
+async function commit(move) {
   const s = session;
-  if (!s) return;
+  if (!s || s.saving) return;
   const next = s.game.apply(s.state, move);
   if (!next) return;
 
+  const out = s.game.outcome(next);
+  if (s.mode === 'remote') {
+    s.saving = true;
+    clearTimers();
+    paintBoard();
+    try {
+      // Let the room snapshot publish the authoritative state. A rejected
+      // write must never leave an optimistic board stranded on one device.
+      await rooms.pushState(s.code, { state: next, outcome: out.over ? out : null, seq: s.seq + 1 });
+    } catch (err) {
+      if (session === s) toast(roomError(err, 'That move did not reach your friend.'), 'error');
+    } finally {
+      s.saving = false;
+      if (session === s) { paintBoard(); paintStatus(); tick(); }
+    }
+    return;
+  }
+
   s.state = next;
   s.seq = (s.seq || 0) + 1;
-  const out = s.game.outcome(next);
 
   paintBoard();
   paintRail();
   paintStatus();
-
-  if (s.mode === 'remote') {
-    rooms.pushState(s.code, { state: next, outcome: out.over ? out : null, seq: s.seq }).catch((err) => {
-      console.warn('[arcade] push', err);
-      toast(err?.code === 'permission-denied' ? roomError(err) : 'That move did not reach your friend.', 'error');
-    });
-  }
 
   tick();
 }
@@ -13075,7 +13274,7 @@ function tick() {
 
   const out = s.game.outcome(s.state);
   if (out.over) { finish(out); return; }
-  if (!bothSeated()) return;
+  if (!bothSeated() || s.saving) return;
 
   const seat = s.game.turn(s.state);
 
@@ -13083,7 +13282,7 @@ function tick() {
   const forced = s.game.auto?.(s.state);
   if (forced) {
     const mine = s.mode === 'solo' || seat === s.seat;
-    if (mine) s.timers.push(setTimeout(() => commit(forced.move), forced.delay || 900));
+    if (mine) s.timers.push(setTimeout(() => { if (session === s) commit(forced.move); }, forced.delay || 900));
     return;
   }
 
@@ -13326,7 +13525,8 @@ function dockHtml() {
 
       <div class="vdock__tiles">
         <div class="vdock__tile vdock__tile--remote" data-tile-remote>
-          <video data-vid-remote autoplay playsinline></video>
+          <video data-vid-remote autoplay playsinline muted></video>
+          <audio data-audio-remote autoplay></audio>
           <div class="vdock__off">
             <span class="vdock__avatar">${esc(initials(s.names[1 - s.seat] || 'Friend'))}</span>
             <span class="vdock__hint">Camera off</span>
@@ -13358,7 +13558,7 @@ function dockHtml() {
         </button>
       </div>
       <button class="btn btn--primary btn--block vdock__sound" type="button" data-sound hidden>${icon('mic')} Tap to hear your friend</button>
-      <p class="vdock__note fs-xs t-mute">Mic alone is a voice call; add the camera for video. Switch either whenever you like — the game keeps running.</p>
+      <p class="vdock__note fs-xs t-mute" data-callnote>Mic alone is a voice call; add the camera for video. Switch either whenever you like — the game keeps running.</p>
     </section>`;
 }
 
@@ -13717,19 +13917,25 @@ function startCall() {
     code: s.code,
     seat: s.seat,
     onRemote: (stream) => {
+      if (session !== s) return;
       const v = q('[data-vid-remote]');
       if (!v) return;
       // Re-attach when the set of tracks changes, so Safari picks up new lanes too.
       const sig = stream.getTracks().map((t) => t.id).join(',');
-      if (v.srcObject !== stream || v.dataset.sig !== sig) {
+      if (v.dataset.sig !== sig) {
         v.dataset.sig = sig;
         v.srcObject = null;
-        v.srcObject = stream;
+        v.srcObject = new MediaStream(stream.getVideoTracks());
+        v.muted = true;
+        v.play?.().catch(() => {});
+        const audio = q('[data-audio-remote]');
+        if (audio) audio.srcObject = new MediaStream(stream.getAudioTracks());
       }
       if (sig) playRemote();
       syncDock();
     },
     onLocal: (stream) => {
+      if (session !== s) return;
       const v = q('[data-vid-local]');
       if (v) {
         v.srcObject = stream;
@@ -13738,10 +13944,11 @@ function startCall() {
       syncDock();
     },
     onStatus: (state) => {
-      if (session) session.status = state;
+      if (session !== s) return;
+      s.status = state;
       syncDock();
     },
-    onError: (err) => toast(roomError(err, 'The video link could not be opened.'), 'error')
+    onError: (err) => { if (session === s) toast(roomError(err, 'The video link could not be opened.'), 'error'); }
   });
 
   s.call.start();
@@ -13750,7 +13957,7 @@ function startCall() {
 /** Start the friend's audio/video; browsers may insist on a tap first. */
 function playRemote() {
   const s = session;
-  const v = q('[data-vid-remote]');
+  const v = q('[data-audio-remote]');
   if (!s || !v?.srcObject) return;
   v.muted = false;
   const p = v.play?.();
@@ -13781,6 +13988,9 @@ async function toggleDevice(kind) {
   const s = session;
   if (!s?.call) { toast('Waiting for your friend to arrive.', 'info'); return; }
 
+  s.deviceBusy ||= {};
+  if (s.deviceBusy[kind]) return;
+  s.deviceBusy[kind] = true;
   const on = !s.media[kind];
   try {
     if (kind === 'cam') await s.call.setCam(on);
@@ -13794,12 +14004,17 @@ async function toggleDevice(kind) {
       'error'
     );
     return;
+  } finally {
+    s.deviceBusy[kind] = false;
   }
 
+  if (session !== s || !s.call) return;
   s.media[kind] = on;
   haptic();
   syncDock();
-  rooms.pushMedia(s.code, s.seat, s.media).catch(() => {});
+  rooms.pushMedia(s.code, s.seat, s.media).catch((err) => {
+    if (session === s) toast(roomError(err, 'Could not share your device status.'), 'error');
+  });
 }
 
 const STATE_LABEL = {
@@ -13816,6 +14031,12 @@ function syncDock() {
   if (!s || !dock) return;
 
   const label = dock.querySelector('[data-callstate]');
+  const note = dock.querySelector('[data-callnote]');
+  if (note) note.textContent = !canCall()
+    ? 'Open the app over HTTPS (or localhost) and allow camera/microphone access in your browser.'
+    : s.status === 'failed'
+    ? 'Call connection failed. Try Reconnect. Mobile and restricted networks may require a configured TURN relay; the game and chat still work.'
+    : 'Mic alone is a voice call; add the camera for video. Allow device access when your browser asks.';
   if (label) {
     label.textContent = !canCall()
       ? 'Not available here'

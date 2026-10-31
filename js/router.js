@@ -28,7 +28,10 @@ export function currentQuery() {
 export function navigate(path, { replace = false } = {}) {
   const target = path.startsWith('#') ? path : `#${path}`;
   if (location.hash === target) { resolve(); return; }
-  if (replace) history.replaceState(null, '', target);
+  if (replace) {
+    history.replaceState(null, '', target);
+    resolve(); // replaceState does not dispatch hashchange (auth/invite redirects).
+  }
   else location.hash = target;
 }
 

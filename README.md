@@ -110,12 +110,45 @@ rooms/{code}/iceHost|iceGuest   ICE candidates, one lane per seat
 Game rooms are the only documents that live outside `users/{uid}`, because two
 people have to read and write the same board. A room is readable only by a
 signed-in user who already knows its code (it is never listable), writable only
-by the two players, and the host's browser deletes it on the way out.
+by the two players after an atomic guest-seat claim. The host deletes it when
+explicitly leaving the table or navigating to another page in the app. Reloading
+or closing a tab no longer deletes the room; a reload returns to the same seat.
+There is no automatic expiry/abandoned-room cleanup yet.
 
 Rules ([firestore.rules](firestore.rules), [storage.rules](storage.rules)): only `request.auth.uid == uid` may read or write anything under `users/`; game rooms are limited to their two players; everything else is denied.
 
 > Remote games need the `rooms` rules published. If invites fail with a
 > permission error, run `firebase deploy --only firestore:rules`.
+
+### Online games and voice/video troubleshooting
+
+- Both players must sign in and open the same hosted app, then share the invite
+  link or enter the room code. Hosting should use **HTTPS**. Plain HTTP on a LAN
+  IP address does not permit camera/microphone access; localhost is an exception.
+- Publish both the updated app and [firestore.rules](firestore.rules) to the
+  Firebase project configured in [js/config.js](js/config.js). A local rules edit
+  does not change the deployed database. Hard-refresh both clients after updating.
+- Mic and camera start **off** for privacy. Each person turns on the devices they
+  want to share and accepts their browser's permission prompt. If audio autoplay
+  is blocked, use **Tap to hear your friend**. Voice works without a camera.
+- **TURN is required for reliable calls across different networks.** The current
+  `RTC.iceServers` setting in [js/config.js](js/config.js) is empty, so the app has
+  STUN but no relay. Supply a working TURN service, ideally with UDP and TLS/TCP
+  on port 443. Use provider-issued short-lived client credentials; never embed a
+  provider API secret in this public frontend. Production credential renewal
+  requires a trusted backend. A TURN service is not included in this repository.
+- **Reconnect** opens a new signaling session without changing the game. Game
+  moves and chat use Firestore independently of the voice/video connection.
+- Room claims and moves now use transactions. Offline or conflicting writes
+  leave the last shared board intact and show an error instead of advancing only
+  one player's board.
+
+Regression checks: `node --test tools/test-arcade.js` runs dependency-free room,
+game-loop and navigation checks. `node tools/test-arcade-browser.js` runs two real
+WebRTC peers in headless Edge/Chromium with **synthetic** camera/microphone input
+and in-memory signaling. Set `ARCADE_BROWSER` if the browser is installed outside
+the usual Windows locations. These checks do not contact Firebase or verify its
+deployed rules, physical devices, or connectivity across separate networks.
 
 ---
 

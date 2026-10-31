@@ -67,7 +67,6 @@ function teardown({ leaveTable = true } = {}) {
   s.timers?.forEach((t) => clearTimeout(t));
   try { s.unsub?.(); } catch { /* already off */ }
   try { s.call?.close(); } catch { /* already closed */ }
-  window.removeEventListener('beforeunload', s.onUnload);
   if (leaveTable && s.mode === 'remote' && s.code) rooms.leaveRoom(s.code, s.seat);
 }
 
@@ -353,13 +352,16 @@ function openRoom({ code, game, seat, state, level, room }) {
     media: { cam: false, mic: false },
     peerMedia: { cam: false, mic: false },
     status: 'waiting',
-    timers: [],
-    onUnload: () => rooms.leaveRoom(code, seat)
+    timers: []
   };
 
-  window.addEventListener('beforeunload', session.onUnload);
+  // A reload must not delete the host's room or evict the returning guest.
+  // Only an explicit leave/navigation releases the seat.
+  history.replaceState(null, '', `#/games?room=${encodeURIComponent(code)}`);
+  lastQuery = `${code}|`;
   session.unsub = rooms.watchRoom(code, onRoomChange, onRoomGone);
   repaint();
+  tick(); // Resume forced moves/rematch UI when rejoining an unchanged board.
 }
 
 /* =========================================================
@@ -374,8 +376,10 @@ function onRoomChange(data) {
   s.names = [data.host?.name || 'Host', data.guest?.name || ''];
   s.peerMedia = data.media?.[rooms.SEAT_KEYS[1 - s.seat]] || { cam: false, mic: false };
 
-  if ((data.seq || 0) !== s.seq) {
+  const seatingChanged = wasSeated !== Boolean(data.guestUid);
+  if ((data.seq || 0) !== s.seq || seatingChanged) {
     s.seq = data.seq || 0;
+    s.round = data.round || 0;
     s.state = data.state;
     clearTimers();
     paintBoard();
@@ -394,6 +398,15 @@ function onRoomChange(data) {
     if (!s.call) startCall();
     else if (s.seat === 0 && join !== s.joinSeen) s.call.reconnect();
     s.joinSeen = join;
+  } else if (s.call) {
+    s.call.close();
+    s.call = null;
+    s.media = { cam: false, mic: false };
+    s.peerMedia = { cam: false, mic: false };
+    s.joinSeen = '';
+    s.status = 'waiting';
+    rooms.pushMedia(s.code, s.seat, s.media).catch(() => {});
+    syncDock();
   }
 
   if (data.guestUid && !wasSeated && s.seat === 0) toast(`${data.guest?.name || 'Your friend'} joined.`, 'success');
@@ -414,10 +427,10 @@ function onRoomChange(data) {
 function onRoomGone(err) {
   if (!session || session.mode !== 'remote') return;
   toast(err ? roomError(err, 'Lost the connection to the game.') : 'The game was closed.', err ? 'error' : 'info', err ? 6000 : 3000);
-  const s = session;
   teardown({ leaveTable: false });
-  if (s.seat === 1) navigate('/games', { replace: true });
-  else repaint();
+  lastQuery = '';
+  navigate('/games', { replace: true });
+  repaint();
 }
 
 /* =========================================================
@@ -438,7 +451,7 @@ function context() {
   const local = isLocal();
   return {
     seat: local ? s.game.turn(s.state) : s.seat,
-    myTurn: !out.over && bothSeated() && (local || s.game.turn(s.state) === s.seat),
+    myTurn: !s.saving && !out.over && bothSeated() && (local || s.game.turn(s.state) === s.seat),
     local,
     over: out.over,
     names: s.names,
@@ -457,26 +470,36 @@ function play(move) {
   commit(move);
 }
 
-function commit(move) {
+async function commit(move) {
   const s = session;
-  if (!s) return;
+  if (!s || s.saving) return;
   const next = s.game.apply(s.state, move);
   if (!next) return;
 
+  const out = s.game.outcome(next);
+  if (s.mode === 'remote') {
+    s.saving = true;
+    clearTimers();
+    paintBoard();
+    try {
+      // Let the room snapshot publish the authoritative state. A rejected
+      // write must never leave an optimistic board stranded on one device.
+      await rooms.pushState(s.code, { state: next, outcome: out.over ? out : null, seq: s.seq + 1 });
+    } catch (err) {
+      if (session === s) toast(roomError(err, 'That move did not reach your friend.'), 'error');
+    } finally {
+      s.saving = false;
+      if (session === s) { paintBoard(); paintStatus(); tick(); }
+    }
+    return;
+  }
+
   s.state = next;
   s.seq = (s.seq || 0) + 1;
-  const out = s.game.outcome(next);
 
   paintBoard();
   paintRail();
   paintStatus();
-
-  if (s.mode === 'remote') {
-    rooms.pushState(s.code, { state: next, outcome: out.over ? out : null, seq: s.seq }).catch((err) => {
-      console.warn('[arcade] push', err);
-      toast(err?.code === 'permission-denied' ? roomError(err) : 'That move did not reach your friend.', 'error');
-    });
-  }
 
   tick();
 }
@@ -489,7 +512,7 @@ function tick() {
 
   const out = s.game.outcome(s.state);
   if (out.over) { finish(out); return; }
-  if (!bothSeated()) return;
+  if (!bothSeated() || s.saving) return;
 
   const seat = s.game.turn(s.state);
 
@@ -497,7 +520,7 @@ function tick() {
   const forced = s.game.auto?.(s.state);
   if (forced) {
     const mine = s.mode === 'solo' || seat === s.seat;
-    if (mine) s.timers.push(setTimeout(() => commit(forced.move), forced.delay || 900));
+    if (mine) s.timers.push(setTimeout(() => { if (session === s) commit(forced.move); }, forced.delay || 900));
     return;
   }
 
@@ -740,7 +763,8 @@ function dockHtml() {
 
       <div class="vdock__tiles">
         <div class="vdock__tile vdock__tile--remote" data-tile-remote>
-          <video data-vid-remote autoplay playsinline></video>
+          <video data-vid-remote autoplay playsinline muted></video>
+          <audio data-audio-remote autoplay></audio>
           <div class="vdock__off">
             <span class="vdock__avatar">${esc(initials(s.names[1 - s.seat] || 'Friend'))}</span>
             <span class="vdock__hint">Camera off</span>
@@ -772,7 +796,7 @@ function dockHtml() {
         </button>
       </div>
       <button class="btn btn--primary btn--block vdock__sound" type="button" data-sound hidden>${icon('mic')} Tap to hear your friend</button>
-      <p class="vdock__note fs-xs t-mute">Mic alone is a voice call; add the camera for video. Switch either whenever you like — the game keeps running.</p>
+      <p class="vdock__note fs-xs t-mute" data-callnote>Mic alone is a voice call; add the camera for video. Switch either whenever you like — the game keeps running.</p>
     </section>`;
 }
 
@@ -1131,19 +1155,25 @@ function startCall() {
     code: s.code,
     seat: s.seat,
     onRemote: (stream) => {
+      if (session !== s) return;
       const v = q('[data-vid-remote]');
       if (!v) return;
       // Re-attach when the set of tracks changes, so Safari picks up new lanes too.
       const sig = stream.getTracks().map((t) => t.id).join(',');
-      if (v.srcObject !== stream || v.dataset.sig !== sig) {
+      if (v.dataset.sig !== sig) {
         v.dataset.sig = sig;
         v.srcObject = null;
-        v.srcObject = stream;
+        v.srcObject = new MediaStream(stream.getVideoTracks());
+        v.muted = true;
+        v.play?.().catch(() => {});
+        const audio = q('[data-audio-remote]');
+        if (audio) audio.srcObject = new MediaStream(stream.getAudioTracks());
       }
       if (sig) playRemote();
       syncDock();
     },
     onLocal: (stream) => {
+      if (session !== s) return;
       const v = q('[data-vid-local]');
       if (v) {
         v.srcObject = stream;
@@ -1152,10 +1182,11 @@ function startCall() {
       syncDock();
     },
     onStatus: (state) => {
-      if (session) session.status = state;
+      if (session !== s) return;
+      s.status = state;
       syncDock();
     },
-    onError: (err) => toast(roomError(err, 'The video link could not be opened.'), 'error')
+    onError: (err) => { if (session === s) toast(roomError(err, 'The video link could not be opened.'), 'error'); }
   });
 
   s.call.start();
@@ -1164,7 +1195,7 @@ function startCall() {
 /** Start the friend's audio/video; browsers may insist on a tap first. */
 function playRemote() {
   const s = session;
-  const v = q('[data-vid-remote]');
+  const v = q('[data-audio-remote]');
   if (!s || !v?.srcObject) return;
   v.muted = false;
   const p = v.play?.();
@@ -1195,6 +1226,9 @@ async function toggleDevice(kind) {
   const s = session;
   if (!s?.call) { toast('Waiting for your friend to arrive.', 'info'); return; }
 
+  s.deviceBusy ||= {};
+  if (s.deviceBusy[kind]) return;
+  s.deviceBusy[kind] = true;
   const on = !s.media[kind];
   try {
     if (kind === 'cam') await s.call.setCam(on);
@@ -1208,12 +1242,17 @@ async function toggleDevice(kind) {
       'error'
     );
     return;
+  } finally {
+    s.deviceBusy[kind] = false;
   }
 
+  if (session !== s || !s.call) return;
   s.media[kind] = on;
   haptic();
   syncDock();
-  rooms.pushMedia(s.code, s.seat, s.media).catch(() => {});
+  rooms.pushMedia(s.code, s.seat, s.media).catch((err) => {
+    if (session === s) toast(roomError(err, 'Could not share your device status.'), 'error');
+  });
 }
 
 const STATE_LABEL = {
@@ -1230,6 +1269,12 @@ function syncDock() {
   if (!s || !dock) return;
 
   const label = dock.querySelector('[data-callstate]');
+  const note = dock.querySelector('[data-callnote]');
+  if (note) note.textContent = !canCall()
+    ? 'Open the app over HTTPS (or localhost) and allow camera/microphone access in your browser.'
+    : s.status === 'failed'
+    ? 'Call connection failed. Try Reconnect. Mobile and restricted networks may require a configured TURN relay; the game and chat still work.'
+    : 'Mic alone is a voice call; add the camera for video. Allow device access when your browser asks.';
   if (label) {
     label.textContent = !canCall()
       ? 'Not available here'

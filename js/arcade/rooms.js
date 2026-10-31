@@ -6,7 +6,7 @@
  * The same document doubles as the signalling channel for the video call.
  */
 import {
-  db, doc, collection, setDoc, getDoc, updateDoc, deleteDoc, onSnapshot, getDocs, serverTimestamp, runTransaction
+  db, doc, collection, setDoc, updateDoc, deleteDoc, onSnapshot, getDocs, serverTimestamp, runTransaction
 } from '../firebase.js';
 import * as store from '../store.js';
 
@@ -93,25 +93,33 @@ export async function joinRoom(code) {
   const who = me();
   if (!who.uid) throw new Error('Sign in to join the game.');
 
-  const snap = await getDoc(roomRef(code));
-  if (!snap.exists()) throw new Error('That game could not be found — the link may have expired.');
+  return runTransaction(db, async (tx) => {
+    const snap = await tx.get(roomRef(code));
+    if (!snap.exists()) throw new Error('That game could not be found — the link may have expired.');
 
-  const data = snap.data();
-  // The host's own tab (or an older room without tab ids) goes back to seat one.
-  if (data.hostUid === who.uid && (!data.hostTab || data.hostTab === TAB)) return { seat: 0, data };
-  if (data.guestUid && data.guestUid !== who.uid) throw new Error('This game already has two players.');
+    const data = snap.data();
+    // The host's own tab (or an older room without tab ids) goes back to seat one.
+    if (data.hostUid === who.uid && (!data.hostTab || data.hostTab === TAB)) return { seat: 0, data };
+    if (data.guestUid && (data.guestUid !== who.uid || (data.guestTab && data.guestTab !== TAB))) {
+      throw new Error('This game already has two players. Leave the other table before joining here.');
+    }
 
-  // Every arrival gets a fresh token — the host reopens the call when it changes.
-  const seated = {
-    guestUid: who.uid,
-    guestTab: TAB,
-    guestJoin: newCode(8),
-    guest: { name: who.name },
-    offer: null,
-    answer: null
-  };
-  await updateDoc(roomRef(code), { ...seated, updatedAt: serverTimestamp() });
-  return { seat: 1, data: { ...data, ...seated } };
+    // Every arrival gets a fresh token — the host reopens the call when it changes.
+    const seated = {
+      guestUid: who.uid,
+      guestTab: TAB,
+      guestJoin: newCode(8),
+      guest: { name: who.name },
+      offer: null,
+      answer: null
+    };
+    const media = { ...data.media, b: { cam: false, mic: false } };
+    const rematch = { ...data.rematch, b: false };
+    tx.update(roomRef(code), {
+      ...seated, 'media.b': media.b, 'rematch.b': false, updatedAt: serverTimestamp()
+    });
+    return { seat: 1, data: { ...data, ...seated, media, rematch } };
+  });
 }
 
 export function watchRoom(code, onChange, onGone) {
@@ -130,12 +138,19 @@ export function watchRoom(code, onChange, onGone) {
 
 /* ------------------------------ play ------------------------------ */
 export async function pushState(code, { state, outcome, seq }) {
-  await updateDoc(roomRef(code), {
-    state,
-    outcome: outcome || null,
-    seq,
-    rematch: { a: false, b: false },
-    updatedAt: serverTimestamp()
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(roomRef(code));
+    if (!snap.exists()) throw new Error('The game was closed.');
+    const data = snap.data();
+    if (!data.guestUid) throw new Error('Wait for your friend to rejoin.');
+    if ((data.seq || 0) !== seq - 1) throw new Error('The board changed. Please try your move again.');
+    tx.update(roomRef(code), {
+      state,
+      outcome: outcome || null,
+      seq,
+      rematch: { a: false, b: false },
+      updatedAt: serverTimestamp()
+    });
   });
 }
 
@@ -147,13 +162,18 @@ export async function pushRematch(code, seat, on) {
 }
 
 export async function restart(code, state, seq, round) {
-  await updateDoc(roomRef(code), {
-    state,
-    outcome: null,
-    seq,
-    round,
-    rematch: { a: false, b: false },
-    updatedAt: serverTimestamp()
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(roomRef(code));
+    if (!snap.exists()) throw new Error('The game was closed.');
+    if ((snap.data().seq || 0) !== seq - 1) throw new Error('The board changed. Please try restarting again.');
+    tx.update(roomRef(code), {
+      state,
+      outcome: null,
+      seq,
+      round,
+      rematch: { a: false, b: false },
+      updatedAt: serverTimestamp()
+    });
   });
 }
 
@@ -218,6 +238,8 @@ export async function leaveRoom(code, seat) {
         guest: null,
         offer: null,
         answer: null,
+        'media.b': { cam: false, mic: false },
+        'rematch.b': false,
         updatedAt: serverTimestamp()
       });
     }
