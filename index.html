@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=5" />
+  <meta name="theme-color" content="#f4f7f8" />
+  <meta name="description" content="LifeFlow — your all-in-one premium life management dashboard. Tasks, goals, finances, habits, journal and more." />
+  <title>LifeFlow — Your life, in flow</title>
+
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌊</text></svg>" />
+  <link rel="manifest" href="./manifest.webmanifest" id="manifest-link" />
+  <script>
+    // A manifest cannot be fetched from file:// — skip it there to keep the console clean.
+    if (location.protocol === 'file:') document.getElementById('manifest-link').remove();
+  </script>
+
+  <!-- iOS needs the app on the Home Screen before it may show notifications. -->
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="LifeFlow" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Fraunces:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Sora:wght@600;700;800&family=JetBrains+Mono:wght@400;600;700&family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500&family=Amiri+Quran&family=Amiri:wght@400;700&family=Noto+Naskh+Arabic:wght@400;600&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="./css/base.css" />
+  <link rel="stylesheet" href="./css/components.css" />
+  <link rel="stylesheet" href="./css/layout.css" />
+  <link rel="stylesheet" href="./css/pages.css" />
+  <link rel="stylesheet" href="./css/calm.css" />
+  <link rel="stylesheet" href="./css/soft.css" />
+  <link rel="stylesheet" href="./css/features.css" />
+  <link rel="stylesheet" href="./css/games.css" />
+  <link rel="stylesheet" href="./css/quran.css" />
+  <link rel="stylesheet" href="./css/themes.css" />
+
+  <script>
+    // Apply stored theme + comfort settings before first paint to avoid flash.
+    (function () {
+      try {
+        var d = document.documentElement;
+        var pref = localStorage.getItem('lf:theme') || 'light';
+        var skin = localStorage.getItem('lf:skin') || 'classic';
+        var resolved = pref === 'auto'
+          ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+          : (pref === 'dark' ? 'dark' : 'light');
+        // "Dark luxe" and "Hacker" themes always paint on their own dark canvas.
+        if (skin === 'dark' || skin === 'hacker') resolved = 'dark';
+        d.setAttribute('data-theme', resolved);
+        d.setAttribute('data-skin', skin);
+        var a = localStorage.getItem('lf:accent');
+        if (a) d.setAttribute('data-accent', a);
+        d.setAttribute('data-calm', localStorage.getItem('lf:calm') === 'on' ? 'on' : 'off');
+        d.setAttribute('data-scale', localStorage.getItem('lf:scale') || 'md');
+      } catch (e) {}
+    })();
+  </script>
+</head>
+<body>
+  <!-- Ambient animated background -->
+  <div class="aurora" aria-hidden="true">
+    <span class="blob blob-1"></span>
+    <span class="blob blob-2"></span>
+    <span class="blob blob-3"></span>
+    <span class="grain"></span>
+  </div>
+
+  <!-- Boot splash -->
+  <div id="splash" class="splash">
+    <div class="splash__mark">
+      <svg viewBox="0 0 64 64" width="64" height="64" aria-hidden="true">
+        <defs>
+          <linearGradient id="sg" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#7b83f5" />
+            <stop offset="0.5" stop-color="#45c9c2" />
+            <stop offset="1" stop-color="#ffb4a6" />
+          </linearGradient>
+        </defs>
+        <path d="M12 40c6-14 14-14 20 0s14 14 20 0" fill="none" stroke="url(#sg)" stroke-width="6" stroke-linecap="round" />
+        <path d="M12 24c6-14 14-14 20 0s14 14 20 0" fill="none" stroke="url(#sg)" stroke-width="6" stroke-linecap="round" opacity=".45" />
+      </svg>
+    </div>
+    <p class="splash__word">LifeFlow</p>
+    <div class="splash__bar"><i></i></div>
+  </div>
+
+  <!-- App root -->
+  <div id="app" class="app" hidden>
+    <!-- Desktop / tablet sidebar -->
+    <aside id="sidebar" class="sidebar" aria-label="Main navigation"></aside>
+
+    <div class="app__main">
+      <header id="topbar" class="topbar"></header>
+      <main id="view" class="view" tabindex="-1"></main>
+      <nav id="bottomnav" class="bottomnav" aria-label="Primary"></nav>
+    </div>
+
+    <button id="fab" class="fab" type="button" aria-label="Quick add" aria-haspopup="dialog">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+    </button>
+  </div>
+
+  <!-- Public (logged out) shell -->
+  <div id="public" class="public" hidden></div>
+
+  <!-- Overlays -->
+  <div id="sheet-root" class="sheet-root" aria-live="polite"></div>
+  <div id="modal-root" class="modal-root"></div>
+  <div id="toast-root" class="toast-root" role="status" aria-live="polite"></div>
+
+  <script>
+    // Browsers block ES modules on file://, so a double-clicked index.html runs
+    // the pre-built bundle (node tools/build-standalone.js); http(s) uses the sources.
+    (function () {
+      var s = document.createElement('script');
+      if (location.protocol === 'file:') {
+        s.src = './js/app.bundle.js';
+      } else {
+        s.type = 'module';
+        s.src = './js/app.js';
+      }
+      document.body.appendChild(s);
+    })();
+  </script>
+  <noscript>
+    <div style="padding:2rem;font-family:sans-serif">LifeFlow needs JavaScript enabled to run.</div>
+  </noscript>
+</body>
+</html>
