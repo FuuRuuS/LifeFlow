@@ -61,7 +61,11 @@ export const APP = {
  *   ]
  */
 export const RTC = {
-  iceServers: []
+  iceServers: [],
+  /** Authenticated backend; activate TURN secrets and deploy before cross-network use. */
+  credentialsUrl: `https://us-central1-${firebaseConfig.projectId}.cloudfunctions.net/rtcIceServers`,
+  /** Diagnostic switch: true verifies relay connectivity without direct candidates. */
+  forceRelay: false
 };
 
 export const CURRENCIES = [

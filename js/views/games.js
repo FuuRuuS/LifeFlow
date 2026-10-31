@@ -1169,6 +1169,8 @@ function startCall() {
         const audio = q('[data-audio-remote]');
         if (audio) audio.srcObject = new MediaStream(stream.getAudioTracks());
       }
+      // Safari can receive the track before it is unmuted; retry on that event.
+      v.play?.().catch(() => {});
       if (sig) playRemote();
       syncDock();
     },
@@ -1184,6 +1186,11 @@ function startCall() {
     onStatus: (state) => {
       if (session !== s) return;
       s.status = state;
+      syncDock();
+    },
+    onDiagnostic: (diagnostic) => {
+      if (session !== s) return;
+      s.callDiagnostic = diagnostic;
       syncDock();
     },
     onError: (err) => { if (session === s) toast(roomError(err, 'The video link could not be opened.'), 'error'); }
@@ -1256,6 +1263,7 @@ async function toggleDevice(kind) {
 }
 
 const STATE_LABEL = {
+  exchange: 'Setting up the call…',
   connecting: 'Connecting…',
   connected: 'Connected',
   disconnected: 'Reconnecting…',
@@ -1272,6 +1280,8 @@ function syncDock() {
   const note = dock.querySelector('[data-callnote]');
   if (note) note.textContent = !canCall()
     ? 'Open the app over HTTPS (or localhost) and allow camera/microphone access in your browser.'
+    : s.callDiagnostic?.issue && s.status !== 'connected'
+    ? s.callDiagnostic.issue
     : s.status === 'failed'
     ? 'Call connection failed. Try Reconnect. Mobile and restricted networks may require a configured TURN relay; the game and chat still work.'
     : 'Mic alone is a voice call; add the camera for video. Allow device access when your browser asks.';
@@ -1280,6 +1290,8 @@ function syncDock() {
       ? 'Not available here'
       : !s.room?.guestUid
       ? 'Waiting for your friend'
+      : s.status === 'connected' && s.callDiagnostic?.selectedPath
+      ? `Connected · ${s.callDiagnostic.selectedPath === 'relay' ? 'relay' : 'direct'}`
       : STATE_LABEL[s.status] || 'Connecting…';
   }
 

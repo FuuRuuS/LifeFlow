@@ -40,7 +40,7 @@ async function browserTests() {
     for (const fn of watchers.get(key) || []) queueMicrotask(() => fn(snap));
   };
   const deps = {
-    RTC: { iceServers: [] },
+    loadIceConfig: async () => ({ config: { iceServers: [], iceTransportPolicy: 'all', iceCandidatePoolSize: 0 }, relayAvailable: false, warning: null }),
     roomRef: () => 'room', iceRef: (_, seat) => `ice${seat}`,
     newCode: () => crypto.randomUUID(),
     updateDoc: async (key, values) => { records.set(key, { ...records.get(key), ...clone(values) }); emit(key); },

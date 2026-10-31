@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="robots" content="noindex, nofollow, noarchive">
+  <meta name="referrer" content="no-referrer">
+  <meta name="theme-color" content="#101d30">
+  <title>Private observatory · LifeFlow</title>
+  <link rel="stylesheet" href="css/admin.css">
+  <script type="module" src="js/admin.js"></script>
+</head>
+<body class="admin">
+  <a class="skip-link" href="#main-content">Skip to content</a>
+  <div id="network-notice" class="network-notice" role="status" hidden>You’re offline. Reconnect to request fresh data; already loaded information may be out of date.</div>
+
+  <main id="main-content" tabindex="-1">
+    <section id="lock-screen" class="lock-screen" aria-labelledby="lock-title">
+      <header class="lock-brand"><span class="brand-mark" aria-hidden="true">L<span>↗</span></span><div><strong>LifeFlow</strong><span>Private observatory</span></div><span class="restricted-tag">Restricted access</span></header>
+      <div class="lock-layout">
+        <div class="lock-story">
+          <p class="eyebrow"><span class="live-dot" aria-hidden="true"></span> Perspective, with privacy.</p>
+          <h1 id="lock-title">A clearer view of<br>your <span>community.</span></h1>
+          <p class="lock-description">A considered space to understand accounts and shared activity. Nothing more than you need. Everything handled with care.</p>
+          <div class="observatory-art" aria-hidden="true">
+            <div class="orbit orbit-one"></div><div class="orbit orbit-two"></div>
+            <div class="orbit-core"><span>LF</span><small>OBSERVATORY</small></div>
+            <span class="orbit-point point-one"></span><span class="orbit-point point-two"></span><span class="orbit-point point-three"></span>
+            <span class="art-label label-one">Clarity by design</span><span class="art-label label-two">Privacy at the centre</span>
+            <span class="art-coordinate">01 / A QUIETER PERSPECTIVE</span>
+          </div>
+        </div>
+        <div class="access-card">
+          <span class="access-icon" aria-hidden="true">↗</span>
+          <p class="eyebrow">For authorised eyes only</p>
+          <h2>Enter your private space.</h2>
+          <p class="muted">Use your private admin access code. This is not an account password.</p>
+          <form id="login-form" autocomplete="off">
+            <label for="private-code">Private access code</label>
+            <input id="private-code" name="private-code" type="password" autocomplete="off" autocapitalize="none" spellcheck="false" required aria-describedby="code-help login-message">
+            <p id="code-help" class="field-help">Verified only by the server. Never saved in this browser.</p>
+            <button id="login-button" class="button primary" type="submit" disabled><span>Unlock observatory</span><span aria-hidden="true">↗</span></button>
+          </form>
+          <p id="login-message" class="message" role="status" aria-live="polite">Open the address printed by your private server, not the HTML file directly. A server-verified code is required.</p>
+          <button id="session-retry" class="button subtle" type="button" hidden>Retry session check</button>
+          <div class="access-assurances"><span><i aria-hidden="true">✓</i> Server-validated access</span><span><i aria-hidden="true">✓</i> HttpOnly session cookie</span><span><i aria-hidden="true">✓</i> Read-only account insights</span></div>
+          <p class="access-footnote">Passwords are never accessible.<br>Managed by Firebase Authentication.</p>
+        </div>
+      </div>
+      <footer class="lock-footer"><span>LifeFlow / Built for a little more clarity.</span><span>Private by intention. Protected by the server.</span></footer>
+      <noscript><p class="noscript-notice">JavaScript is required. Open this page through the private Node server or an HTTPS site with the admin backend configured.</p></noscript>
+    </section>
+
+    <section id="console" class="console" aria-label="Private account observatory" hidden>
+      <aside class="sidebar" aria-label="Observatory navigation">
+        <div class="sidebar-brand"><span class="brand-mark" aria-hidden="true">L<span>↗</span></span><div><strong>LifeFlow</strong><span>PRIVATE OBSERVATORY</span></div></div>
+        <p class="nav-caption">Workspace</p>
+        <nav><a class="nav-link selected" href="#accounts-section" aria-current="page"><span aria-hidden="true">▦</span> Account directory <span class="nav-dot" aria-hidden="true"></span></a><a class="nav-link" href="#privacy-note"><span aria-hidden="true">◇</span> Privacy &amp; scope</a></nav>
+        <div class="sidebar-bottom"><div class="sidebar-orbit" aria-hidden="true">◎</div><h2>Insight, not intrusion.</h2><p>Only shared activity belongs here. Account credentials never do.</p><span class="sidebar-badge"><span class="live-dot" aria-hidden="true"></span> Private workspace</span></div>
+      </aside>
+      <div class="workspace">
+        <header class="topbar"><p class="breadcrumb">Observatory <span aria-hidden="true">/</span> <strong>Accounts</strong></p><div class="topbar-actions"><span id="timezone" class="timezone"></span><button id="lock-button" class="button lock-button" type="button"><span aria-hidden="true">◇</span> Lock workspace</button></div></header>
+        <div class="workspace-content">
+          <div class="welcome"><div><p class="eyebrow">Your community, in perspective</p><h1 id="console-title" tabindex="-1">The account observatory<span>.</span></h1><p class="muted">A little context. A clearer picture. A privacy-first view.</p></div><div class="date-card"><span class="live-dot" aria-hidden="true"></span><div><span id="today"></span><small id="session-until"></small></div></div></div>
+          <div class="section-heading"><h2>At a glance</h2><span class="scope-pill">Loaded accounts only · not global totals</span></div>
+          <div class="metrics" aria-label="Statistics for loaded accounts only">
+            <article class="metric"><div class="metric-top"><span>Loaded accounts</span><span class="metric-icon mint" aria-hidden="true">▦</span></div><strong id="metric-loaded">—</strong><p>Accounts fetched in this session</p></article>
+            <article class="metric"><div class="metric-top"><span>Enabled accounts</span><span class="metric-icon lilac" aria-hidden="true">✓</span></div><strong id="metric-enabled">—</strong><p>Among loaded accounts · not disabled</p></article>
+            <article class="metric"><div class="metric-top"><span>Verified emails</span><span class="metric-icon peach" aria-hidden="true">@</span></div><strong id="metric-verified">—</strong><p>Among loaded accounts · Auth verified</p></article>
+            <article class="metric"><div class="metric-top"><span>Signed in · 30 days</span><span class="metric-icon blue" aria-hidden="true">↗</span></div><strong id="metric-recent">—</strong><p>Among loaded accounts · Auth sign-in</p></article>
+          </div>
+
+          <section id="accounts-section" class="directory panel" aria-labelledby="directory-title">
+            <div class="directory-heading"><div><p class="eyebrow">The people behind the plans</p><h2 id="directory-title">Account directory <span id="directory-count" class="count-pill">—</span></h2></div><span class="read-only">Read-only access</span></div>
+            <div class="directory-tools"><div class="search-field"><span aria-hidden="true">⌕</span><label class="sr-only" for="account-search">Search loaded accounts by email, name or UID</label><input id="account-search" type="search" placeholder="Search email, name or UID…" autocomplete="off"></div><div class="filter-field"><label for="account-filter">Status</label><select id="account-filter"><option value="all">All accounts</option><option value="enabled">Enabled</option><option value="disabled">Disabled</option><option value="verified">Email verified</option><option value="unverified">Email unverified</option></select></div></div>
+            <p class="search-scope">Search and filters apply to loaded accounts. Load more to expand your view.</p>
+            <div id="accounts-message" class="message directory-message" role="status" aria-live="polite"></div>
+            <div id="account-table-wrap" class="table-scroll" role="region" aria-label="Account directory, scroll horizontally for all columns" tabindex="0" hidden>
+              <table><caption class="sr-only">Loaded Firebase Authentication accounts. Select an account to inspect its details.</caption><thead><tr><th scope="col">Account</th><th scope="col">Status</th><th scope="col">Last sign-in <span class="th-note">Auth</span></th><th scope="col">Created</th><th scope="col"><span class="sr-only">Details</span></th></tr></thead><tbody id="accounts-body"></tbody></table>
+            </div>
+            <div id="accounts-empty" class="empty-state" hidden><span class="empty-symbol" aria-hidden="true">◎</span><h3 id="accounts-empty-title">A quiet space, for now.</h3><p id="accounts-empty-text"></p></div>
+            <footer class="directory-footer"><p id="accounts-scope" role="status">No accounts loaded yet.</p><button id="load-accounts" class="button secondary" type="button" hidden>Load more accounts <span aria-hidden="true">↓</span></button></footer>
+          </section>
+          <aside id="privacy-note" class="privacy-note" aria-labelledby="privacy-title"><span class="privacy-symbol" aria-hidden="true">◇</span><div><h2 id="privacy-title">A clear boundary around your data.</h2><p>Account metadata comes from Firebase Authentication. Activity is client-reported, with server-received timestamps; it is not a complete audit of someone’s behaviour. Sharing is opt-in, with no historical tracking or backfill. IP addresses cannot identify a person or reliably establish a location.</p><p><strong>Passwords are never accessible. Managed by Firebase Authentication.</strong></p></div></aside>
+          <footer class="workspace-footer"><span>LifeFlow <span aria-hidden="true">/</span> Private observatory</span><span>Less noise. More understanding.</span></footer>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="account-dialog" class="account-dialog" aria-labelledby="detail-title">
+    <div class="drawer-top"><span class="eyebrow">Account perspective</span><button id="close-detail" class="icon-button" type="button" aria-label="Close account details">×</button></div>
+    <div class="drawer-heading"><span id="detail-avatar" class="avatar large" aria-hidden="true"></span><div><h2 id="detail-title">Account details</h2><p id="detail-email" class="muted"></p></div></div>
+    <div class="uid-row"><code id="detail-uid"></code><button id="copy-uid" class="button subtle" type="button">Copy UID</button></div>
+    <p id="detail-message" class="message" role="status" aria-live="polite"></p>
+    <button id="retry-detail" class="button secondary" type="button" hidden>Retry account details</button>
+    <div id="detail-content" hidden>
+      <div id="detail-badges" class="detail-badges"></div>
+      <div class="detail-tabs" role="tablist" aria-label="Account detail sections"><button id="tab-overview" role="tab" aria-controls="panel-overview" aria-selected="true" tabindex="0" type="button">Overview</button><button id="tab-activity" role="tab" aria-controls="panel-activity" aria-selected="false" tabindex="-1" type="button">Activity</button><button id="tab-security" role="tab" aria-controls="panel-security" aria-selected="false" tabindex="-1" type="button">Security</button></div>
+      <section id="panel-overview" class="tab-panel" role="tabpanel" aria-labelledby="tab-overview" tabindex="0">
+        <div class="detail-section"><h3>Account essentials</h3><dl id="account-metadata" class="metadata"></dl></div>
+        <div class="detail-section"><div class="section-heading"><h3>Shared activity</h3><span class="mini-label">Server-received</span></div><p class="small muted">Client-reported events only. Sharing does not enable historical tracking or backfill.</p><div id="event-summary" class="event-summary"></div><dl id="observation-metadata" class="metadata"></dl></div>
+        <div class="detail-section"><h3>Activity by module</h3><p class="small muted">Recorded event counts, not time spent or usage estimates.</p><div id="module-chart" class="module-chart"></div></div>
+        <div class="detail-section"><h3>Recorded actions</h3><div id="action-counters" class="action-counters"></div></div>
+        <div class="detail-section"><h3>Current saved items</h3><p class="small muted">Current item counts, independent of activity-sharing consent. Not historical events.</p><div id="item-counts" class="item-counts"></div></div>
+      </section>
+      <section id="panel-activity" class="tab-panel" role="tabpanel" aria-labelledby="tab-activity" tabindex="0" hidden>
+        <div class="detail-section"><h3>The activity trail</h3><p class="small muted">Client-reported activity, newest first. Times reflect server receipt, not necessarily when an action happened. Only available retained events are shown.</p></div>
+        <p id="activity-message" class="message" role="status" aria-live="polite"></p><ol id="activity-list" class="timeline"></ol><button id="load-activity" class="button secondary full-width" type="button" hidden>Load more activity</button>
+      </section>
+      <section id="panel-security" class="tab-panel" role="tabpanel" aria-labelledby="tab-security" tabindex="0" hidden>
+        <div class="security-notice"><span aria-hidden="true">◇</span><h3>Credentials stay private.</h3><p>Passwords are never accessible. Managed by Firebase Authentication.</p><p class="small">This observatory cannot view passwords or change accounts. The private access code is separate from every user’s password.</p></div>
+        <div class="detail-section"><h3>Authentication metadata</h3><dl id="security-metadata" class="metadata"></dl></div>
+        <div class="detail-section"><h3>Latest reported IP</h3><p class="small muted">Masked by default. An IP address is a network signal, not proof of a person’s identity or location.</p><div class="ip-box"><code id="latest-ip">Not recorded</code><span id="ip-time" class="small muted"></span></div><p id="ip-warning" class="sensitive-warning">Sensitive data: reveal only for an authorised review. Requesting a reveal is audited by the server. The address is hidden again after 30 seconds.</p><button id="reveal-ip" class="button secondary" type="button" aria-describedby="ip-warning">Reveal latest IP</button><p id="ip-message" class="message" role="status" aria-live="polite"></p></div>
+      </section>
+    </div>
+    <footer class="drawer-footer">Private context. Considered access.</footer>
+  </dialog>
+</body>
+</html>

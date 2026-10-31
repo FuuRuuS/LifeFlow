@@ -1,0 +1,9 @@
+{
+  "indexes": [],
+  "fieldOverrides": [
+    { "collectionGroup": "activityEvents", "fieldPath": "expireAt", "ttl": true, "indexes": [{ "order": "ASCENDING", "queryScope": "COLLECTION_GROUP" }] },
+    { "collectionGroup": "_privateAdminSessions", "fieldPath": "expireAt", "ttl": true, "indexes": [] },
+    { "collectionGroup": "_privateAdminRateLimits", "fieldPath": "expireAt", "ttl": true, "indexes": [] },
+    { "collectionGroup": "_activityRateLimits", "fieldPath": "expireAt", "ttl": true, "indexes": [] }
+  ]
+}

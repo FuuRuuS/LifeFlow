@@ -437,7 +437,11 @@ const APP = {
  *   ]
  */
 const RTC = {
-  iceServers: []
+  iceServers: [],
+  /** Authenticated backend; activate TURN secrets and deploy before cross-network use. */
+  credentialsUrl: `https://us-central1-${firebaseConfig.projectId}.cloudfunctions.net/rtcIceServers`,
+  /** Diagnostic switch: true verifies relay connectivity without direct candidates. */
+  forceRelay: false
 };
 
 const CURRENCIES = [
@@ -1786,12 +1790,174 @@ function hijriLabel(date = new Date()) {
 return Object.freeze({ METHODS, MADHABS, PRAYERS, CITIES, DEFAULT_PRAYER_PREFS, methodOf, madhabOf, prayerOf, prayerTimes, toHHMM, prayerSchedule, sunriseAt, nextPrayer, countdownLabel, locate, nearestCity, hijriLabel });
   })();
 
+  /* ===== js/activity.js ===== */
+  const __m10 = (function () {
+const { auth } = __m7;
+/** Optional, memory-only activity metadata. Never import store/router here. */
+
+
+const ACTIONS = new Set(['session_started', 'page_view', 'create', 'update', 'delete',
+  'game_join', 'game_create', 'game_move', 'game_leave', 'device_toggle']);
+const MODULES = new Set(['app', 'dashboard', 'tasks', 'calendar', 'events', 'goals',
+  'habits', 'notes', 'purchases', 'games', 'profile', 'finance', 'txns', 'savings',
+  'moods', 'prayers', 'prayer', 'quran', 'archive']);
+const MAX_QUEUE = 30;
+const INTERVAL_MS = 3000;
+const TIMEOUT_MS = 8000;
+let consentUid = null;
+let generation = 0;
+let queue = [];
+let timer = null;
+let active = null;
+let nextSendAt = 0;
+let failures = 0;
+let delivery = 'off';
+
+function supportedOrigin() {
+  if (typeof location === 'undefined') return false;
+  if (location.protocol === 'https:') return true;
+  const host = location.hostname || '';
+  return location.protocol === 'http:' && (host === 'localhost' || host.endsWith('.localhost') ||
+    /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host) || host === '[::1]');
+}
+
+function online() {
+  return typeof navigator === 'undefined' || navigator.onLine !== false;
+}
+
+function clearWork() {
+  generation++;
+  queue = [];
+  if (timer !== null) clearTimeout(timer);
+  timer = null;
+  const previous = active;
+  active = null;
+  previous?.controller.abort();
+}
+
+/** Only strict true for the current authenticated UID activates consent. */
+function setActivityConsent(uid, on) {
+  const next = on === true && typeof uid === 'string' && uid && auth.currentUser?.uid === uid ? uid : null;
+  if (next === consentUid) {
+    if (!next) clearWork();
+    return;
+  }
+  clearWork();
+  consentUid = next;
+  failures = 0;
+  nextSendAt = 0;
+  delivery = next ? (supportedOrigin() ? 'idle' : 'unsupported') : 'off';
+  // A consent activation in this page, NOT a login or authoritative lastSignIn.
+  if (next) recordActivity('session_started', 'app');
+}
+
+function current(uid, version) {
+  return consentUid === uid && generation === version && auth.currentUser?.uid === uid;
+}
+
+function backoff() {
+  clearWork();
+  failures = Math.min(failures + 1, 5);
+  nextSendAt = Date.now() + Math.min(300000, 30000 * 2 ** (failures - 1));
+  delivery = 'unavailable';
+  // No retry timer: failed events and the entire backlog are discarded.
+}
+
+function schedule() {
+  if (timer !== null || active || !queue.length) return;
+  timer = setTimeout(() => {
+    timer = null;
+    void sendNext();
+  }, Math.max(250, nextSendAt - Date.now()));
+}
+
+/** Fire-and-forget. Only these two whitelisted strings ever enter the queue. */
+function recordActivity(action, module) {
+  if (!ACTIONS.has(action) || !MODULES.has(module) || !consentUid) return;
+  if (auth.currentUser?.uid !== consentUid) { setActivityConsent(null, false); return; }
+  if (!supportedOrigin()) return;
+  if (!online()) { backoff(); return; }
+  if (delivery === 'unavailable' && Date.now() < nextSendAt) return;
+  if (queue.length + (active ? 1 : 0) >= MAX_QUEUE) return;
+  queue.push({ action, module });
+  schedule();
+}
+
+async function sendNext() {
+  const uid = consentUid;
+  const version = generation;
+  const user = auth.currentUser;
+  if (!uid || !current(uid, version)) { setActivityConsent(null, false); return; }
+  if (!supportedOrigin() || !online()) { backoff(); return; }
+  const event = queue.shift();
+  if (!event) return;
+  const job = { controller: new AbortController() };
+  active = job;
+  nextSendAt = Date.now() + INTERVAL_MS;
+  delivery = 'pending';
+  const signal = job.controller.signal;
+  let timeout;
+  let onAbort;
+  try {
+    const cancelled = new Promise((_, reject) => {
+      onAbort = () => reject(new Error('cancelled'));
+      signal.addEventListener('abort', onAbort, { once: true });
+      timeout = setTimeout(() => job.controller.abort(), TIMEOUT_MS);
+    });
+    const result = await Promise.race([cancelled, (async () => {
+      // Capture identity/generation BEFORE token lookup and recheck BEFORE fetch.
+      if (!current(uid, version) || signal.aborted) return null;
+      const token = await user.getIdToken();
+      if (!current(uid, version) || user.uid !== uid || signal.aborted) return null;
+      if (!online() || !supportedOrigin() || typeof token !== 'string' || !token) throw new Error('unavailable');
+      const response = await fetch('/api/activity', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(event),
+        credentials: 'omit', cache: 'no-store', redirect: 'error',
+        mode: 'same-origin', referrerPolicy: 'no-referrer', signal
+      });
+      if (!current(uid, version) || signal.aborted) return null;
+      if (!response.ok) throw new Error('unavailable');
+      return response.json();
+    })()]);
+    if (!current(uid, version) || signal.aborted) return;
+    if (result?.recorded !== true) throw new Error('unavailable');
+    failures = 0;
+    delivery = 'recorded';
+  } catch {
+    if (current(uid, version)) backoff();
+  } finally {
+    clearTimeout(timeout);
+    signal.removeEventListener('abort', onAbort);
+    if (active === job) active = null;
+    // A stale worker must never clear or drain another account's queue.
+    if (generation === version) {
+      if (!current(uid, version)) setActivityConsent(null, false);
+      else schedule();
+    }
+  }
+}
+
+/** Local state only; saving consent does not prove the backend recorded anything. */
+function getActivityStatus() {
+  if (consentUid && auth.currentUser?.uid !== consentUid) setActivityConsent(null, false);
+  return { enabled: Boolean(consentUid), delivery, queued: queue.length + (active ? 1 : 0) };
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('offline', () => { if (consentUid) backoff(); });
+}
+return Object.freeze({ setActivityConsent, recordActivity, getActivityStatus });
+  })();
+
   /* ===== js/store.js ===== */
   const __m8 = (function () {
 const { db, auth, doc, collection, addDoc, setDoc, getDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy, serverTimestamp, writeBatch } = __m7;
 const { ymd, today, addDays, toMillis, pct, clamp } = __m1;
 const { BADGES } = __m4;
 const { PRAYERS, DEFAULT_PRAYER_PREFS } = __m9;
+const { recordActivity, setActivityConsent } = __m10;
 /**
  * LifeFlow — data layer.
  *
@@ -1816,12 +1982,14 @@ const { PRAYERS, DEFAULT_PRAYER_PREFS } = __m9;
 
 
 
+
 const COLLECTIONS = ['tasks', 'events', 'goals', 'savings', 'txns', 'purchases', 'habits', 'notes', 'moods', 'prayers'];
 
 /** Collections keyed by date string rather than an auto id. */
 const DATE_KEYED = ['moods', 'prayers'];
 
 const DEFAULT_PREFS = {
+  activitySharing: false,
   currency: 'USD',
   theme: 'light',
   accent: 'violet',
@@ -1873,6 +2041,10 @@ const state = {
 
 const listeners = new Set();
 let unsubs = [];
+let connectionGeneration = 0;
+let confirmedActivitySharing = false;
+let activityLocallyDisabled = false;
+let activityPreferenceGeneration = 0;
 
 function subscribe(fn) {
   listeners.add(fn);
@@ -1890,12 +2062,14 @@ function emit() {
    ========================================================= */
 async function connect(user) {
   disconnect();
+  const connection = connectionGeneration;
   state.uid = user.uid;
   state.user = user;
   state.loading = true;
   emit();
 
   await ensureProfile(user);
+  if (connection !== connectionGeneration || state.uid !== user.uid) return;
 
   const pending = new Set(COLLECTIONS);
   const settle = (name) => {
@@ -1911,14 +2085,29 @@ async function connect(user) {
   unsubs.push(
     onSnapshot(
       doc(db, 'users', user.uid),
+      { includeMetadataChanges: true },
       (snap) => {
+        if (connection !== connectionGeneration || state.uid !== user.uid) return;
         state.profile = { id: snap.id, ...(snap.data() || {}) };
         state.profile.prefs = { ...DEFAULT_PREFS, ...(state.profile.prefs || {}) };
         state.profile.prefs.widgets = { ...DEFAULT_PREFS.widgets, ...(state.profile.prefs.widgets || {}) };
         state.profile.prefs.prayer = { ...DEFAULT_PRAYER_PREFS, ...(state.profile.prefs.prayer || {}) };
+        // Cached/optimistic true is not consent confirmation from the server.
+        const shared = state.profile.prefs.activitySharing === true;
+        if (!snap.metadata?.hasPendingWrites && !snap.metadata?.fromCache) {
+          confirmedActivitySharing = shared;
+          setActivityConsent(user.uid, shared && !activityLocallyDisabled);
+        } else if (!shared) {
+          setActivityConsent(user.uid, false);
+        }
         emit();
       },
-      (err) => console.warn('[store] profile snapshot', err)
+      (err) => {
+        if (connection !== connectionGeneration) return;
+        confirmedActivitySharing = false;
+        setActivityConsent(user.uid, false);
+        console.warn('[store] profile snapshot', err);
+      }
     )
   );
 
@@ -1929,10 +2118,12 @@ async function connect(user) {
       onSnapshot(
         q,
         (snap) => {
+          if (connection !== connectionGeneration) return;
           state[name] = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
           settle(name);
         },
         (err) => {
+          if (connection !== connectionGeneration) return;
           console.warn(`[store] ${name} snapshot`, err);
           settle(name);
         }
@@ -1942,6 +2133,10 @@ async function connect(user) {
 }
 
 function disconnect() {
+  setActivityConsent(null, false);
+  connectionGeneration++;
+  confirmedActivitySharing = false;
+  activityLocallyDisabled = false;
   unsubs.forEach((u) => { try { u(); } catch { /* ignore */ } });
   unsubs = [];
   state.uid = null;
@@ -1984,16 +2179,22 @@ function docRef(name, id) {
 }
 
 async function create(name, data) {
+  const uid = state.uid;
+  const connection = connectionGeneration;
   const ref = await addDoc(colRef(name), {
     ...data,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp()
   });
+  if (uid === state.uid && uid === auth.currentUser?.uid && connection === connectionGeneration) recordActivity('create', name);
   return ref.id;
 }
 
 async function update(name, id, patch) {
+  const uid = state.uid;
+  const connection = connectionGeneration;
   await updateDoc(docRef(name, id), { ...patch, updatedAt: serverTimestamp() });
+  if (uid === state.uid && uid === auth.currentUser?.uid && connection === connectionGeneration) recordActivity('update', name);
 }
 
 /**
@@ -2007,6 +2208,9 @@ function setEventDeleteHook(fn) {
 }
 
 async function remove(name, id, { skipRemote = false } = {}) {
+  const uid = state.uid;
+  const connection = connectionGeneration;
+  const ref = docRef(name, id);
   if (name === 'events' && eventDeleteHook && !skipRemote) {
     const ev = state.events.find((e) => e.id === id);
     if (ev?.gcalId) {
@@ -2017,18 +2221,43 @@ async function remove(name, id, { skipRemote = false } = {}) {
       }
     }
   }
-  await deleteDoc(docRef(name, id));
+  await deleteDoc(ref);
+  if (uid === state.uid && uid === auth.currentUser?.uid && connection === connectionGeneration) recordActivity('delete', name);
 }
 
 async function updateProfileDoc(patch) {
+  const uid = state.uid;
+  const connection = connectionGeneration;
   await setDoc(doc(db, 'users', state.uid), { ...patch, updatedAt: serverTimestamp() }, { merge: true });
+  if (uid === state.uid && uid === auth.currentUser?.uid && connection === connectionGeneration) recordActivity('update', 'profile');
 }
 
 async function savePrefs(patch) {
+  const uid = state.uid;
+  const connection = connectionGeneration;
+  const changesConsent = Object.prototype.hasOwnProperty.call(patch, 'activitySharing');
+  const preference = changesConsent ? ++activityPreferenceGeneration : activityPreferenceGeneration;
+  if (changesConsent) {
+    // Latch off through pending writes, rollback snapshots, and failed revocations.
+    activityLocallyDisabled = true;
+    setActivityConsent(uid, false);
+  }
   const prefs = { ...(state.profile?.prefs || DEFAULT_PREFS), ...patch };
   state.profile = { ...(state.profile || {}), prefs };
   emit();
-  await updateProfileDoc({ prefs });
+  try {
+    await updateProfileDoc({ prefs });
+    if (changesConsent && preference === activityPreferenceGeneration && uid === state.uid && uid === auth.currentUser?.uid && connection === connectionGeneration) {
+      activityLocallyDisabled = patch.activitySharing !== true;
+      setActivityConsent(uid, confirmedActivitySharing && !activityLocallyDisabled);
+    }
+  } catch (err) {
+    if (changesConsent && preference === activityPreferenceGeneration && uid === state.uid && connection === connectionGeneration) {
+      state.profile.prefs.activitySharing = confirmedActivitySharing;
+      emit();
+    }
+    throw err;
+  }
 }
 
 function prefs() {
@@ -2592,7 +2821,7 @@ return Object.freeze({ DEFAULT_PREFS, state, subscribe, connect, disconnect, cre
   })();
 
   /* ===== js/notify.js ===== */
-  const __m10 = (function () {
+  const __m11 = (function () {
 const store = __m8;
 const { prayerSchedule } = __m9;
 const { ymd, addDays, fromYmd, today } = __m1;
@@ -3064,7 +3293,7 @@ return Object.freeze({ DEFAULT_NOTIFY_PREFS, isSupported, permission, isStandalo
   })();
 
   /* ===== js/gcal.js ===== */
-  const __m11 = (function () {
+  const __m12 = (function () {
 const { GOOGLE } = __m4;
 const store = __m8;
 const { ymd, fromYmd, addDays } = __m1;
@@ -3526,7 +3755,7 @@ return Object.freeze({ DEFAULT_GCAL_PREFS, isAvailable, isConfigured, gcalPrefs,
   })();
 
   /* ===== js/views/breathe.js ===== */
-  const __m13 = (function () {
+  const __m14 = (function () {
 const { esc, haptic } = __m1;
 const { icon } = __m3;
 const { toast } = __m2;
@@ -3744,7 +3973,7 @@ return Object.freeze({ PATTERNS, mountBreathe, openBreathe });
   })();
 
   /* ===== js/views/forms.js ===== */
-  const __m14 = (function () {
+  const __m15 = (function () {
 const { esc, today, uid } = __m1;
 const { icon } = __m3;
 const { modal, toast, confirmDialog, confetti } = __m2;
@@ -4323,13 +4552,13 @@ return Object.freeze({ openTaskForm, openEventForm, openGoalForm, openSavingsFor
   })();
 
   /* ===== js/palette.js ===== */
-  const __m12 = (function () {
+  const __m13 = (function () {
 const { esc, debounce } = __m1;
 const { icon } = __m3;
 const store = __m8;
 const { navigate } = __m6;
-const { openBreathe } = __m13;
-const { openTaskForm, openEventForm, openNoteForm, openTxnForm, openHabitForm, openGoalForm, openPurchaseForm } = __m14;
+const { openBreathe } = __m14;
+const { openTaskForm, openEventForm, openNoteForm, openTxnForm, openHabitForm, openGoalForm, openPurchaseForm } = __m15;
 /**
  * LifeFlow — command palette (⌘K / Ctrl+K, or "/").
  *
@@ -4666,7 +4895,7 @@ return Object.freeze({ isOpen, close, open, toggle, initPalette });
   })();
 
   /* ===== js/views/public.js ===== */
-  const __m15 = (function () {
+  const __m16 = (function () {
 const { $, el, esc } = __m1;
 const { icon } = __m3;
 const { theme, toast, withLoading } = __m2;
@@ -5049,17 +5278,17 @@ return Object.freeze({ navigate, renderLanding, renderLogin, renderSignup, rende
   })();
 
   /* ===== js/views/shell.js ===== */
-  const __m16 = (function () {
+  const __m17 = (function () {
 const { $, esc, initials, firstName, today } = __m1;
 const { icon } = __m3;
 const { theme, modal, toast, svgDefs, confirmDialog } = __m2;
 const store = __m8;
 const { navigate, getCurrent } = __m6;
-const { openTaskForm, openEventForm, openNoteForm, openTxnForm, openHabitForm, openGoalForm, openPurchaseForm } = __m14;
-const { openBreathe } = __m13;
-const { open: openPalette } = __m12;
+const { openTaskForm, openEventForm, openNoteForm, openTxnForm, openHabitForm, openGoalForm, openPurchaseForm } = __m15;
+const { openBreathe } = __m14;
+const { open: openPalette } = __m13;
 const { nextPrayer, countdownLabel } = __m9;
-const { upcomingAlarms, notifyPrefs, permission: notifyPermission } = __m10;
+const { upcomingAlarms, notifyPrefs, permission: notifyPermission } = __m11;
 const { auth, signOut } = __m7;
 /**
  * LifeFlow — application shell: sidebar, top bar, bottom navigation,
@@ -5514,7 +5743,7 @@ return Object.freeze({ initShell, showApp, mountPage, unmountPage });
   })();
 
   /* ===== js/views/focus.js ===== */
-  const __m18 = (function () {
+  const __m19 = (function () {
 const { el, esc } = __m1;
 const { icon } = __m3;
 const { ring, animateProgress, toast, confetti } = __m2;
@@ -5654,7 +5883,7 @@ return Object.freeze({ mountFocus, focusTimer });
   })();
 
   /* ===== js/arcade/games/tictactoe.js ===== */
-  const __m20 = (function () {
+  const __m21 = (function () {
 
 /**
  * LifeFlow Arcade — Tic-Tac-Toe.
@@ -5835,7 +6064,7 @@ return Object.freeze({ meta, create, turn, apply, outcome, auto, ai, view, bind,
   })();
 
   /* ===== js/arcade/games/memory.js ===== */
-  const __m21 = (function () {
+  const __m22 = (function () {
 
 /**
  * LifeFlow Arcade — Memory.
@@ -6042,7 +6271,7 @@ return Object.freeze({ meta, create, turn, apply, outcome, note, auto, ai, view,
   })();
 
   /* ===== js/arcade/games/dame.js ===== */
-  const __m22 = (function () {
+  const __m23 = (function () {
 
 /**
  * LifeFlow Arcade — Dame (draughts / checkers, 8×8).
@@ -6357,7 +6586,7 @@ return Object.freeze({ meta, create, turn, moves, apply, outcome, auto, ai, view
   })();
 
   /* ===== js/arcade/games/connect4.js ===== */
-  const __m23 = (function () {
+  const __m24 = (function () {
 
 /**
  * LifeFlow Arcade — Connect Four.
@@ -6588,7 +6817,7 @@ return Object.freeze({ meta, create, turn, apply, outcome, auto, ai, view, bind,
   })();
 
   /* ===== js/arcade/games/reversi.js ===== */
-  const __m24 = (function () {
+  const __m25 = (function () {
 
 /**
  * LifeFlow Arcade — Reversi (Othello).
@@ -6828,7 +7057,7 @@ return Object.freeze({ meta, create, turn, apply, outcome, auto, note, ai, view,
   })();
 
   /* ===== js/arcade/games/dots.js ===== */
-  const __m25 = (function () {
+  const __m26 = (function () {
 
 /**
  * LifeFlow Arcade — Dots & Boxes.
@@ -7079,7 +7308,7 @@ return Object.freeze({ meta, create, turn, apply, outcome, auto, note, ai, view,
   })();
 
   /* ===== js/arcade/games/kit.js ===== */
-  const __m27 = (function () {
+  const __m28 = (function () {
 
 /**
  * LifeFlow Arcade — small shared helpers for the social and card games.
@@ -7190,8 +7419,8 @@ return Object.freeze({ esc, rand, shuffle, fill, draw, catChips, bindCats, valid
   })();
 
   /* ===== js/arcade/games/truthdare.js ===== */
-  const __m26 = (function () {
-const { esc, fill, draw, catChips, bindCats, validCats, beads, burst } = __m27;
+  const __m27 = (function () {
+const { esc, fill, draw, catChips, bindCats, validCats, beads, burst } = __m28;
 /**
  * LifeFlow Arcade — Truth or Dare.
  * A social card game: the performer picks Truth or Dare, the other player judges.
@@ -8063,8 +8292,8 @@ return Object.freeze({ DECKS, meta, create, turn, apply, outcome, auto, ai, note
   })();
 
   /* ===== js/arcade/games/pairs.js ===== */
-  const __m29 = (function () {
-const { esc, draw, catChips, bindCats, validCats, beads, burst } = __m27;
+  const __m30 = (function () {
+const { esc, draw, catChips, bindCats, validCats, beads, burst } = __m28;
 /**
  * LifeFlow Arcade — the shared engine behind the two-pick social games.
  * Each round one question, two hidden answers, then a reveal.
@@ -8297,8 +8526,8 @@ return Object.freeze({ makePairGame });
   })();
 
   /* ===== js/arcade/games/insync.js ===== */
-  const __m28 = (function () {
-const { makePairGame } = __m29;
+  const __m29 = (function () {
+const { makePairGame } = __m30;
 /**
  * LifeFlow Arcade — In Sync.
  * "Would you rather…" for two. Both answer in secret, then reveal — how often do you match?
@@ -8595,8 +8824,8 @@ return Object.freeze({ meta, create, turn, apply, outcome, auto, ai, note, summa
   })();
 
   /* ===== js/arcade/games/knowme.js ===== */
-  const __m30 = (function () {
-const { makePairGame } = __m29;
+  const __m31 = (function () {
+const { makePairGame } = __m30;
 /**
  * LifeFlow Arcade — Know Me?
  * One answers a question about themselves in secret; the other guesses it.
@@ -8804,8 +9033,8 @@ return Object.freeze({ meta, create, turn, apply, outcome, auto, ai, note, summa
   })();
 
   /* ===== js/arcade/games/quiz.js ===== */
-  const __m31 = (function () {
-const { esc, rand, shuffle, draw, catChips, bindCats, validCats, beads, burst } = __m27;
+  const __m32 = (function () {
+const { esc, rand, shuffle, draw, catChips, bindCats, validCats, beads, burst } = __m28;
 /**
  * LifeFlow Arcade — Quiz Duel.
  * Ten questions, ten categories. Both players answer the same question in turn —
@@ -9240,8 +9469,8 @@ return Object.freeze({ meta, create, turn, apply, outcome, auto, pace, ai, note,
   })();
 
   /* ===== js/arcade/games/goose.js ===== */
-  const __m32 = (function () {
-const { esc, rand } = __m27;
+  const __m33 = (function () {
+const { esc, rand } = __m28;
 /**
  * LifeFlow Arcade — Game of the Goose (Jeu de l'oie).
  * Two dice, 63 squares, and a board full of geese, bridges, inns and wells.
@@ -9558,8 +9787,8 @@ return Object.freeze({ meta, create, turn, apply, outcome, auto, pace, ai, note,
   })();
 
   /* ===== js/arcade/games/eights.js ===== */
-  const __m33 = (function () {
-const { esc, rand, shuffle } = __m27;
+  const __m34 = (function () {
+const { esc, rand, shuffle } = __m28;
 /**
  * LifeFlow Arcade — Crazy Eights (Huit américain).
  * Match the suit or rank of the top card. Eights are wild, twos make your rival draw,
@@ -9903,19 +10132,19 @@ return Object.freeze({ meta, create, turn, playable, apply, outcome, auto, pace,
   })();
 
   /* ===== js/arcade/index.js ===== */
-  const __m19 = (function () {
-const tictactoe = __m20;
-const memory = __m21;
-const dame = __m22;
-const connect4 = __m23;
-const reversi = __m24;
-const dots = __m25;
-const truthdare = __m26;
-const insync = __m28;
-const knowme = __m30;
-const quiz = __m31;
-const goose = __m32;
-const eights = __m33;
+  const __m20 = (function () {
+const tictactoe = __m21;
+const memory = __m22;
+const dame = __m23;
+const connect4 = __m24;
+const reversi = __m25;
+const dots = __m26;
+const truthdare = __m27;
+const insync = __m29;
+const knowme = __m31;
+const quiz = __m32;
+const goose = __m33;
+const eights = __m34;
 /**
  * LifeFlow Arcade — the game registry.
  *
@@ -9957,18 +10186,18 @@ return Object.freeze({ GAMES, gameById, GAME_IDS });
   })();
 
   /* ===== js/views/dashboard.js ===== */
-  const __m17 = (function () {
+  const __m18 = (function () {
 const { esc, greeting, firstName, fmtMoney, today, relativeDay, fmtTime, seededPick, countUp, ymd, haptic } = __m1;
 const { icon } = __m3;
 const { ring, animateProgress, toast, confetti, sparkline } = __m2;
 const store = __m8;
 const { MOODS, QUOTES, PRIORITIES } = __m4;
 const { navigate } = __m6;
-const { openTaskForm, openPurchaseForm } = __m14;
-const { mountFocus } = __m18;
-const { mountBreathe, openBreathe } = __m13;
+const { openTaskForm, openPurchaseForm } = __m15;
+const { mountFocus } = __m19;
+const { mountBreathe, openBreathe } = __m14;
 const { prayerSchedule, nextPrayer, countdownLabel } = __m9;
-const { GAMES } = __m19;
+const { GAMES } = __m20;
 /**
  * LifeFlow — Dashboard: the personal life cockpit.
  */
@@ -10622,13 +10851,13 @@ return Object.freeze({ meta, render });
   })();
 
   /* ===== js/views/tasks.js ===== */
-  const __m34 = (function () {
+  const __m35 = (function () {
 const { esc, today, relativeDay, fmtTime, pct, debounce } = __m1;
 const { icon } = __m3;
 const { animateProgress, initSortable, initSwipe, toast, confetti, confirmDialog } = __m2;
 const store = __m8;
 const { TASK_CATEGORIES, PRIORITIES } = __m4;
-const { openTaskForm } = __m14;
+const { openTaskForm } = __m15;
 const { currentQuery } = __m6;
 /**
  * LifeFlow — Tasks: categories, priorities, search, drag-to-reorder, swipe actions.
@@ -10905,13 +11134,13 @@ return Object.freeze({ meta, render });
   })();
 
   /* ===== js/views/calendar.js ===== */
-  const __m35 = (function () {
+  const __m36 = (function () {
 const { esc, ymd, today, fromYmd, monthLabel, fmtTime, relativeDay } = __m1;
 const { icon } = __m3;
 const { toast, confirmDialog, initSwipe } = __m2;
 const store = __m8;
 const { EVENT_TYPES } = __m4;
-const { openEventForm } = __m14;
+const { openEventForm } = __m15;
 /**
  * LifeFlow — Calendar: month grid with events, appointments and reminders.
  */
@@ -11146,12 +11375,12 @@ return Object.freeze({ meta, render });
   })();
 
   /* ===== js/views/finance.js ===== */
-  const __m36 = (function () {
+  const __m37 = (function () {
 const { esc, fmtMoney, pct, ymd, relativeDay, countUp } = __m1;
 const { icon } = __m3;
 const { animateProgress, ring, sparkline, toast, confirmDialog, initSwipe } = __m2;
 const store = __m8;
-const { openSavingsForm, openTxnForm, openContribute, txnCategory } = __m14;
+const { openSavingsForm, openTxnForm, openContribute, txnCategory } = __m15;
 /**
  * LifeFlow — Finance: savings goals, cashflow and expense tracking.
  */
@@ -11440,12 +11669,12 @@ return Object.freeze({ meta, render });
   })();
 
   /* ===== js/views/purchases.js ===== */
-  const __m37 = (function () {
+  const __m38 = (function () {
 const { esc, fmtMoney, relativeDay, ymd, countUp, haptic } = __m1;
 const { icon } = __m3;
 const { toast, confetti, confirmDialog, initSwipe } = __m2;
 const store = __m8;
-const { openPurchaseForm, purchasePriority, txnCategory } = __m14;
+const { openPurchaseForm, purchasePriority, txnCategory } = __m15;
 const { navigate } = __m6;
 /**
  * LifeFlow — Purchases: the wish list that keeps your money honest.
@@ -11653,13 +11882,13 @@ return Object.freeze({ meta, render });
   })();
 
   /* ===== js/views/goals.js ===== */
-  const __m38 = (function () {
+  const __m39 = (function () {
 const { esc, relativeDay } = __m1;
 const { icon } = __m3;
 const { animateProgress, ring, toast, confetti } = __m2;
 const store = __m8;
 const { GOAL_AREAS } = __m4;
-const { openGoalForm } = __m14;
+const { openGoalForm } = __m15;
 /**
  * LifeFlow — Goals: personal & professional ambitions with milestones.
  */
@@ -11798,12 +12027,12 @@ return Object.freeze({ meta, render });
   })();
 
   /* ===== js/views/habits.js ===== */
-  const __m39 = (function () {
+  const __m40 = (function () {
 const { esc, ymd, today, addDays, startOfWeek, pct, haptic } = __m1;
 const { icon } = __m3;
 const { animateProgress, ring, toast, confetti } = __m2;
 const store = __m8;
-const { openHabitForm } = __m14;
+const { openHabitForm } = __m15;
 /**
  * LifeFlow — Habits: daily check-ins, streaks and a 12-week heatmap.
  */
@@ -11959,9 +12188,10 @@ return Object.freeze({ meta, render });
   })();
 
   /* ===== js/arcade/rooms.js ===== */
-  const __m41 = (function () {
+  const __m42 = (function () {
 const { db, doc, collection, setDoc, updateDoc, deleteDoc, onSnapshot, getDocs, serverTimestamp, runTransaction } = __m7;
 const store = __m8;
+const { recordActivity } = __m10;
 /**
  * LifeFlow Arcade — remote play over Firestore.
  *
@@ -11969,6 +12199,7 @@ const store = __m8;
  * state. Both players watch it; only the player whose turn it is writes to it.
  * The same document doubles as the signalling channel for the video call.
  */
+
 
 
 
@@ -12048,6 +12279,7 @@ async function createRoom({ gameId, level, state }) {
     updatedAt: serverTimestamp()
   });
 
+  if (who.uid === store.state.uid) recordActivity('game_create', 'games');
   return code;
 }
 
@@ -12055,7 +12287,7 @@ async function joinRoom(code) {
   const who = me();
   if (!who.uid) throw new Error('Sign in to join the game.');
 
-  return runTransaction(db, async (tx) => {
+  const result = await runTransaction(db, async (tx) => {
     const snap = await tx.get(roomRef(code));
     if (!snap.exists()) throw new Error('That game could not be found — the link may have expired.');
 
@@ -12082,6 +12314,8 @@ async function joinRoom(code) {
     });
     return { seat: 1, data: { ...data, ...seated, media, rematch } };
   });
+  if (who.uid === store.state.uid) recordActivity('game_join', 'games');
+  return result;
 }
 
 function watchRoom(code, onChange, onGone) {
@@ -12100,6 +12334,7 @@ function watchRoom(code, onChange, onGone) {
 
 /* ------------------------------ play ------------------------------ */
 async function pushState(code, { state, outcome, seq }) {
+  const uid = store.state.uid;
   await runTransaction(db, async (tx) => {
     const snap = await tx.get(roomRef(code));
     if (!snap.exists()) throw new Error('The game was closed.');
@@ -12114,6 +12349,7 @@ async function pushState(code, { state, outcome, seq }) {
       updatedAt: serverTimestamp()
     });
   });
+  if (uid && uid === store.state.uid) recordActivity('game_move', 'games');
 }
 
 async function pushRematch(code, seat, on) {
@@ -12188,6 +12424,7 @@ async function wipeSignals(code) {
 
 async function leaveRoom(code, seat) {
   if (!code) return;
+  const uid = store.state.uid;
   try {
     if (seat === 0) {
       await wipeSignals(code);
@@ -12205,6 +12442,7 @@ async function leaveRoom(code, seat) {
         updatedAt: serverTimestamp()
       });
     }
+    if (uid && uid === store.state.uid) recordActivity('game_leave', 'games');
   } catch (err) {
     console.warn('[arcade] leave', err);
   }
@@ -12212,11 +12450,113 @@ async function leaveRoom(code, seat) {
 return Object.freeze({ SEAT_KEYS, newCode, roomRef, iceRef, inviteLink, createRoom, joinRoom, watchRoom, pushState, pushRematch, restart, pushMedia, CHAT_MAX, sendChat, leaveRoom });
   })();
 
+  /* ===== js/arcade/ice.js ===== */
+  const __m44 = (function () {
+const { auth } = __m7;
+const { RTC, firebaseConfig } = __m4;
+/** Short-lived TURN credentials. Provider secrets never belong in the browser. */
+
+
+
+const STUN = { urls: ['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] };
+const cache = new Map();
+const messages = {
+  'relay-not-configured': 'The TURN relay has not been activated on the server.',
+  'relay-not-deployed': 'The TURN credentials endpoint is not deployed. Direct calls may fail across networks.',
+  'relay-provider-failed': 'The TURN provider could not issue credentials. Check the server configuration.',
+  'origin-not-allowed': 'The TURN service does not allow this app address.',
+  'rate-limited': 'Too many relay requests. Wait a few minutes before reconnecting.',
+  unauthorized: 'Sign in again to obtain call relay credentials.',
+  forbidden: 'The call relay could not verify your room membership.',
+  'relay-unavailable': 'The TURN service could not be reached. Direct calls may fail across networks.'
+};
+
+function safeServers(servers) {
+  if (!Array.isArray(servers)) return [];
+  return servers.slice(0, 32).flatMap((server) => {
+    const urls = (Array.isArray(server?.urls) ? server.urls : [server?.urls])
+      .filter((url) => typeof url === 'string' && /^(stun|stuns|turn|turns):[^\s/@]+$/i.test(url) && !/:53(?:\?|$)/.test(url));
+    const stun = urls.filter((url) => /^stuns?:/i.test(url));
+    const turn = urls.filter((url) => /^turns?:/i.test(url));
+    const result = stun.length ? [{ urls: stun }] : [];
+    if (turn.length && typeof server.username === 'string' && server.username && typeof server.credential === 'string' && server.credential) {
+      result.push({ urls: turn, username: server.username, credential: server.credential });
+    }
+    return result;
+  });
+}
+
+function hasRelay(servers) {
+  return servers.some((server) => server.urls.some((url) => /^turns?:/i.test(url)));
+}
+
+async function loadIceConfig(code, { force = false } = {}) {
+  const user = auth.currentUser;
+  const key = `${user?.uid || ''}:${code}`;
+  const saved = cache.get(key);
+  if (!force && saved && saved.until > Date.now()) return saved.value;
+  const staticServers = safeServers(RTC.iceServers);
+  let servers = [STUN, ...staticServers];
+  let warning = null;
+  let until = Date.now() + 30000;
+  try {
+    if (!RTC.credentialsUrl) {
+      if (!hasRelay(servers)) throw Object.assign(new Error(), { code: 'relay-not-configured' });
+    } else {
+      if (!user) throw Object.assign(new Error(), { code: 'unauthorized' });
+      // file:// must use the hosted endpoint, never send a token to a local file.
+      const base = location.protocol === 'file:' ? `https://${firebaseConfig.projectId}.web.app/` : location.href;
+      const endpoint = new URL(RTC.credentialsUrl, base);
+      if (endpoint.protocol !== 'https:' && !(endpoint.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(endpoint.hostname))) {
+        throw new Error('Unsafe relay endpoint');
+      }
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 12000);
+      try {
+        const request = async (refresh) => fetch(endpoint.href, {
+          method: 'POST', cache: 'no-store', credentials: 'omit', redirect: 'error', signal: controller.signal,
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${await user.getIdToken(refresh)}` },
+          body: JSON.stringify({ roomCode: code })
+        });
+        let response = await request(false);
+        if (response.status === 401) response = await request(true);
+        if (!(response.headers.get('content-type') || '').includes('application/json')) {
+          throw Object.assign(new Error(), { code: 'relay-not-deployed' });
+        }
+        const data = await response.json();
+        if (!response.ok) throw Object.assign(new Error(), { code: data?.error?.code });
+        const fresh = safeServers(data.iceServers);
+        if (!hasRelay(fresh) || !Number.isFinite(data.expiresAt) || data.expiresAt < Date.now() + 60000) {
+          throw Object.assign(new Error(), { code: 'relay-provider-failed' });
+        }
+        servers = [STUN, ...staticServers, ...fresh];
+        until = Math.min(data.expiresAt - 60000, Date.now() + 3600000);
+      } finally { clearTimeout(timer); }
+    }
+  } catch (err) {
+    const code = messages[err.code] ? err.code : 'relay-unavailable';
+    warning = { code, message: messages[code] };
+  }
+  const relayAvailable = hasRelay(servers);
+  const value = {
+    config: { iceServers: servers, iceCandidatePoolSize: 0, iceTransportPolicy: RTC.forceRelay ? 'relay' : 'all' },
+    relayAvailable, warning
+  };
+  // Do not retain another account's short-lived credentials after auth changes.
+  if (auth.currentUser?.uid === user?.uid) {
+    for (const other of cache.keys()) if (other !== key) cache.delete(other);
+    cache.set(key, { until, value });
+  }
+  return value;
+}
+return Object.freeze({ loadIceConfig });
+  })();
+
   /* ===== js/arcade/rtc.js ===== */
-  const __m42 = (function () {
-const { updateDoc, onSnapshot, addDoc, getDocs, deleteDoc } = __m7;
-const { roomRef, iceRef, newCode } = __m41;
-const { RTC } = __m4;
+  const __m43 = (function () {
+const { updateDoc, onSnapshot } = __m7;
+const { roomRef, newCode } = __m42;
+const { loadIceConfig } = __m44;
 /**
  * LifeFlow Arcade — the video call.
  *
@@ -12234,13 +12574,6 @@ const { RTC } = __m4;
 
 
 
-
-const STUN = { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] };
-
-function iceConfig() {
-  const extra = Array.isArray(RTC?.iceServers) ? RTC.iceServers.filter((s) => s && s.urls) : [];
-  return { iceServers: [STUN, ...extra], iceCandidatePoolSize: 2 };
-}
 
 /** Plain, Firestore-safe copy of a candidate. */
 function packCandidate(c, sid) {
@@ -12262,13 +12595,15 @@ function unpackCandidate(d) {
 }
 
 const AUTO_RETRIES = 3;
+const MAX_CANDIDATES = 80;
+const ICE_BATCH_MS = 100;
 
 const canCall = () =>
   typeof RTCPeerConnection !== 'undefined' &&
   Boolean(navigator.mediaDevices?.getUserMedia) &&
   (location.protocol === 'https:' || location.protocol === 'file:' || ['localhost', '127.0.0.1'].includes(location.hostname));
 
-function createCall({ code, seat, onRemote, onLocal, onStatus, onError }) {
+function createCall({ code, seat, onRemote, onLocal, onStatus, onError, onDiagnostic }) {
   const host = seat === 0;
   const remote = new MediaStream();
   const tx = { audio: null, video: null };
@@ -12288,18 +12623,55 @@ function createCall({ code, seat, onRemote, onLocal, onStatus, onError }) {
   let retries = 0;
   let watchdog = null;
   let recoveryTimer = null;
+  let recoveryWork = null;
+  let controlVersion = 0;
+  let loadedConfig = null;
+  let waitingOffer = false;
+  let terminalFailed = false;
+  let configIssue = null;
+  let attemptIssue = null;
+  let remoteSid = '';
+  const remoteSeen = new Set();
+  const packets = new WeakMap();
+  const ownIceField = host ? 'rtcIceHost' : 'rtcIceGuest';
+  const otherIceField = host ? 'rtcIceGuest' : 'rtcIceHost';
+  // One write lane across ALL sessions. A previously in-flight packet must
+  // finish before a new offer/answer can publish its replacement packet.
+  let roomWork = Promise.resolve();
+  const diagnostic = {
+    phase: 'exchange', relayAvailable: false, relayCandidate: false,
+    remoteCandidates: 0, issue: null, selectedPath: null
+  };
+  let lastDiagnostic = '';
   const acquiring = { audio: null, video: null };
   const wanted = { audio: false, video: false };
   const deviceVersion = { audio: 0, video: 0 };
   const senderWork = new WeakMap();
 
-  const status = (s) => { if (!closed || s === 'closed') onStatus?.(s); };
+  function report() {
+    if (closed) return;
+    diagnostic.issue = attemptIssue || configIssue;
+    const key = JSON.stringify(diagnostic);
+    if (key === lastDiagnostic) return;
+    lastDiagnostic = key;
+    onDiagnostic?.({ ...diagnostic });
+  }
+  const status = (s) => {
+    if (closed && s !== 'closed') return;
+    diagnostic.phase = s;
+    onStatus?.(s);
+    report();
+  };
   const current = (conn, mySid) => !closed && conn && pc === conn && sid === mySid &&
     conn.signalingState !== 'closed' && conn.connectionState !== 'closed';
 
   function fail(context, err) {
     console.warn('[arcade]', context, err);
     if (closed) return;
+    clearWatchdog();
+    clearRecovery();
+    terminalFailed = true;
+    attemptIssue = 'Call setup failed. Reconnect to try again.';
     status('failed');
     onError?.(err);
   }
@@ -12307,6 +12679,9 @@ function createCall({ code, seat, onRemote, onLocal, onStatus, onError }) {
   function attachRemote(track) {
     if (closed || remote.getTracks().includes(track)) return;
     remote.addTrack(track);
+    track.addEventListener('unmute', () => {
+      if (!closed && remote.getTracks().includes(track)) onRemote?.(remote);
+    });
     track.addEventListener('ended', () => {
       if (closed || !remote.getTracks().includes(track)) return;
       try { remote.removeTrack(track); } catch { /* already gone */ }
@@ -12329,49 +12704,227 @@ function createCall({ code, seat, onRemote, onLocal, onStatus, onError }) {
     recoveryTimer = null;
   }
 
-  /** Ask for a fresh connection: the host renegotiates, the guest nudges the host. */
-  function recover(reason) {
+  function queueRoomWrite(guard, work) {
+    const next = roomWork.catch(() => {}).then(() => {
+      if (!closed && guard()) return work();
+    });
+    roomWork = next;
+    return next;
+  }
+
+  async function refreshConfig(force, version) {
+    const result = await loadIceConfig(code, { force });
+    if (closed || version !== controlVersion) return false;
+    loadedConfig = result.config;
+    diagnostic.relayAvailable = Boolean(result.relayAvailable);
+    configIssue = result.warning?.message || (!result.relayAvailable
+      ? 'No TURN relay is available. Direct connections may fail on restricted networks.' : null);
+    report(); // Persistent diagnostic, never an onError/toast for a helper warning.
+    return true;
+  }
+
+  function connected(conn) {
+    return conn && !['failed', 'disconnected', 'closed'].includes(conn.iceConnectionState) &&
+      (conn.connectionState === 'connected' ||
+      ((!conn.connectionState || conn.connectionState === 'new' || conn.connectionState === 'connecting') &&
+        ['connected', 'completed'].includes(conn.iceConnectionState)));
+  }
+
+  function exhausted() {
+    clearWatchdog();
+    clearRecovery();
+    terminalFailed = true;
+    attemptIssue = (host && !pc?.remoteDescription) || (!host && (waitingOffer || !pc))
+      ? 'Signaling received no answer or fresh offer. Both players should refresh, then reconnect.'
+      : !diagnostic.relayAvailable
+        ? 'Connection failed after retries: no TURN relay is available.'
+        : !diagnostic.relayCandidate
+          ? 'Connection failed after retries: no TURN relay candidate was obtained.'
+          : 'Connection failed after retries. Check the network and reconnect manually.';
+    status('failed');
+  }
+
+  /** Automatic kicks share a finite budget; only an explicit manual retry resets it. */
+  function recover(reason, force = false) {
     if (closed) return;
+    if (!force && recoveryWork) return recoveryWork;
+    // Do not let another automatic kick replace a queued manual refresh.
+    if (!force && recoveryTimer) return;
+    clearWatchdog();
+    clearRecovery();
+    const version = ++controlVersion;
+    if (reason !== 'manual' && reason !== 'guest start' && retries >= AUTO_RETRIES) {
+      exhausted();
+      return;
+    }
     if (host) {
       const delay = 3000 - (Date.now() - lastNegotiation);
       if (delay > 0) {
-        if (!recoveryTimer) recoveryTimer = setTimeout(() => {
+        recoveryTimer = setTimeout(() => {
           recoveryTimer = null;
-          recover(reason);
+          if (!closed && version === controlVersion) recover(reason, force);
         }, delay);
         return;
       }
-      return negotiate();
-    } else {
-      return updateDoc(roomRef(code), { rtcKick: newCode(8) })
-        .catch((err) => fail('reconnect request', err));
     }
+    if (reason !== 'manual' && reason !== 'guest start') retries += 1;
+    terminalFailed = false;
+    attemptIssue = null;
+    status('exchange');
+    scheduleRecovery(pc, 25000, 'timeout');
+    const work = (async () => {
+      try {
+        if (!await refreshConfig(force, version)) return;
+        if (host) await negotiate();
+        else {
+          waitingOffer = true;
+          // Prefix distinguishes user intent from automatic kicks: random
+          // automatic IDs alone must never reset the host's retry budget.
+          await queueRoomWrite(() => version === controlVersion, () =>
+            updateDoc(roomRef(code), { rtcKick: `${force ? 'manual:' : ''}${newCode(8)}` }));
+          if (closed || version !== controlVersion) return;
+          scheduleRecovery(pc, 25000, 'timeout');
+        }
+      } catch {
+        if (!closed && version === controlVersion) {
+          fail('call recovery', new Error('Unable to prepare the call. Reconnect to retry.'));
+        }
+      }
+    })();
+    recoveryWork = work;
+    work.finally(() => { if (recoveryWork === work) recoveryWork = null; });
+    return work;
   }
 
   function scheduleRecovery(conn, delay, reason) {
     const mySid = sid;
-    if (!current(conn, mySid)) return;
-    clearWatchdog();
-    if (retries >= AUTO_RETRIES) return;
+    const active = () => conn ? current(conn, mySid) : !closed && !pc && sid === mySid;
+    if (!active() || terminalFailed) return;
+    // Repeated ICE/connection events must not postpone the original deadline.
+    if (watchdog) return;
     watchdog = setTimeout(() => {
       watchdog = null;
-      if (!current(conn, mySid) || conn.connectionState === 'connected') return;
-      retries += 1;
-      recover(reason);
+      if (!active() || connected(conn) && !waitingOffer && !recoveryWork) return;
+      if (recoveryWork) {
+        // Offline Firestore writes may remain pending indefinitely. Do not
+        // silently consume the only watchdog while a recovery is still busy.
+        controlVersion += 1;
+        fail('call timeout', new Error('Call signaling timed out. Reconnect to retry.'));
+      } else if (retries >= AUTO_RETRIES) exhausted();
+      else recover(reason);
     }, delay);
+  }
+
+  function packetValue(state, mySid) {
+    return { sid: mySid, candidates: state.candidates.slice(0, MAX_CANDIDATES) };
+  }
+
+  function scheduleIce(conn, mySid) {
+    const state = packets.get(conn);
+    if (!current(conn, mySid) || !state?.published || state.timer || state.inFlight ||
+        state.sent >= state.candidates.length) return;
+    state.timer = setTimeout(() => {
+      state.timer = null;
+      flushIce(conn, mySid);
+    }, ICE_BATCH_MS);
+  }
+
+  async function flushIce(conn, mySid) {
+    const state = packets.get(conn);
+    if (!current(conn, mySid) || !state?.published || state.inFlight ||
+        state.sent >= state.candidates.length) return;
+    state.inFlight = true;
+    try {
+      await queueRoomWrite(() => current(conn, mySid), async () => {
+        const packet = packetValue(state, mySid);
+        await updateDoc(roomRef(code), { [ownIceField]: packet });
+        if (current(conn, mySid)) state.sent = packet.candidates.length;
+      });
+    } catch {
+      if (current(conn, mySid)) {
+        state.published = false; // Stop a failing write loop; manual recovery can retry.
+        fail('ICE signaling', new Error('Unable to exchange call candidates. Reconnect to retry.'));
+      }
+    } finally {
+      state.inFlight = false;
+      scheduleIce(conn, mySid);
+    }
+  }
+
+  async function publishDescription(conn, mySid, fields) {
+    const state = packets.get(conn);
+    await queueRoomWrite(() => current(conn, mySid), async () => {
+      const packet = packetValue(state, mySid);
+      await updateDoc(roomRef(code), { ...fields, [ownIceField]: packet });
+      if (!current(conn, mySid)) return;
+      state.sent = packet.candidates.length;
+      state.published = true;
+    });
+    // Candidates gathered while setLocalDescription/updateDoc was pending
+    // remain cumulative and are flushed only AFTER the description is written.
+    scheduleIce(conn, mySid);
+  }
+
+  function receivePacket(packet, expectedSid) {
+    if (!expectedSid || packet?.sid !== expectedSid || !Array.isArray(packet.candidates)) return;
+    if (remoteSid !== expectedSid) {
+      remoteSid = expectedSid;
+      remoteSeen.clear();
+      pending = pending.filter((p) => p.sid === expectedSid);
+    }
+    for (const d of packet.candidates.slice(0, MAX_CANDIDATES)) {
+      if (!d || typeof d.candidate !== 'string' || !d.candidate || (d.sid && d.sid !== expectedSid)) continue;
+      const init = unpackCandidate(d);
+      const key = JSON.stringify(init);
+      if (remoteSeen.has(key) || remoteSeen.size >= MAX_CANDIDATES) continue;
+      remoteSeen.add(key);
+      if (pc && sid === expectedSid && pc.remoteDescription) addRemoteCandidate(init);
+      else pending.push({ sid: expectedSid, init });
+    }
+    diagnostic.remoteCandidates = remoteSeen.size;
+    report();
+  }
+
+  async function selectedPath(conn, mySid) {
+    try {
+      const stats = await conn.getStats();
+      if (!current(conn, mySid) || !connected(conn)) return;
+      let pair;
+      stats.forEach((s) => {
+        if (s.type === 'transport' && s.selectedCandidatePairId) pair = stats.get(s.selectedCandidatePairId) || pair;
+      });
+      if (!pair) stats.forEach((s) => {
+        if (s.type === 'candidate-pair' && (s.selected || s.nominated && s.state === 'succeeded')) pair = s;
+      });
+      if (!pair) return;
+      const localCandidate = stats.get(pair.localCandidateId);
+      const remoteCandidate = stats.get(pair.remoteCandidateId);
+      if (!localCandidate?.candidateType || !remoteCandidate?.candidateType) return;
+      diagnostic.selectedPath = [localCandidate, remoteCandidate].some((s) => s.candidateType === 'relay') ? 'relay' : 'direct';
+      report();
+    } catch { /* Some Safari versions do not expose selected-pair stats. */ }
   }
 
   function buildPc() {
     if (closed) return null;
     clearWatchdog();
-    if (pc) { try { pc.close(); } catch { /* noop */ } }
+    if (pc) {
+      clearTimeout(packets.get(pc)?.timer);
+      try { pc.close(); } catch { /* noop */ }
+    }
     clearRemote();
     tx.audio = null;
     tx.video = null;
 
-    const conn = new RTCPeerConnection(iceConfig());
+    const conn = new RTCPeerConnection(loadedConfig);
     const mySid = sid;
     pc = conn;
+    packets.set(conn, { candidates: [], keys: new Set(), published: false, sent: 0, timer: null, inFlight: false });
+    terminalFailed = false;
+    attemptIssue = null;
+    diagnostic.relayCandidate = false;
+    diagnostic.remoteCandidates = remoteSid === mySid ? remoteSeen.size : 0;
+    diagnostic.selectedPath = null;
 
     conn.addEventListener('track', (ev) => {
       if (!current(conn, mySid)) return;
@@ -12380,23 +12933,51 @@ function createCall({ code, seat, onRemote, onLocal, onStatus, onError }) {
 
     conn.addEventListener('icecandidate', (ev) => {
       if (!ev.candidate || !current(conn, mySid)) return;
-      addDoc(iceRef(code, seat), packCandidate(ev.candidate, mySid))
-        .catch((err) => console.warn('[arcade] publish candidate', err));
+      if (ev.candidate.type === 'relay' || /\btyp relay\b/.test(ev.candidate.candidate || '')) {
+        diagnostic.relayCandidate = true;
+        report();
+      }
+      const state = packets.get(conn);
+      const candidate = packCandidate(ev.candidate, mySid);
+      const key = JSON.stringify(candidate);
+      if (!candidate.candidate || state.keys.has(key) || state.candidates.length >= MAX_CANDIDATES) return;
+      state.keys.add(key);
+      state.candidates.push(candidate);
+      scheduleIce(conn, mySid);
     });
 
-    conn.addEventListener('connectionstatechange', () => {
+    conn.addEventListener('icecandidateerror', (ev) => {
+      if (!current(conn, mySid) || terminalFailed || !/^turns?:/i.test(ev.url || '')) return;
+      // STUN errors (including per-interface 701s) are not proof of TURN failure.
+      // Never surface the event URL, address, errorText, or credentials.
+      attemptIssue = 'A TURN relay request failed. Direct connection is still being attempted.';
+      report();
+    });
+
+    const stateChanged = () => {
       if (!current(conn, mySid)) return;
       const st = conn.connectionState;
-      status(st === 'new' ? 'connecting' : st);
-      if (st === 'connected') { retries = 0; clearWatchdog(); }
-      else if (st === 'failed') scheduleRecovery(conn, host ? 600 : 2500, 'failed');
-      else if (st === 'disconnected') scheduleRecovery(conn, 7000, 'disconnected');
-    });
+      const ice = conn.iceConnectionState;
+      if (connected(conn) && !waitingOffer) {
+        terminalFailed = false;
+        if (!recoveryWork) clearWatchdog();
+        // A queued kick/manual retry still needs a NEW session, even if the
+        // old peer briefly connects during the host's cooldown.
+        status('connected');
+        selectedPath(conn, mySid);
+      } else if (!terminalFailed) {
+        status(conn.remoteDescription ? 'connecting' : 'exchange');
+        if (st === 'failed' || ice === 'failed') scheduleRecovery(conn, host ? 600 : 2500, 'failed');
+        else if (st === 'disconnected' || ice === 'disconnected') scheduleRecovery(conn, 7000, 'disconnected');
+      }
+    };
+    conn.addEventListener('connectionstatechange', stateChanged);
+    conn.addEventListener('iceconnectionstatechange', stateChanged);
 
     // Never connected at all — try a fresh negotiation once in a while.
     scheduleRecovery(conn, 25000, 'timeout');
     onRemote?.(remote);
-    status('connecting');
+    status('exchange');
     return conn;
   }
 
@@ -12453,49 +13034,44 @@ function createCall({ code, seat, onRemote, onLocal, onStatus, onError }) {
     }
   }
 
-  async function start() {
+  async function start(force = false) {
     if (started || closed || !canCall()) return;
     started = true;
-    status('connecting');
-
-    // The other side's candidates — queued until their description is in place.
-    unsubs.push(
-      onSnapshot(
-        iceRef(code, host ? 1 : 0),
-        (snap) => {
-          if (closed) return;
-          snap.docChanges().forEach((change) => {
-            if (change.type !== 'added') return;
-            const d = change.doc.data();
-            if (!d?.sid || !d.candidate) return; // stale signals from an older version
-            const init = unpackCandidate(d);
-            if (pc && d.sid === sid && pc.remoteDescription) addRemoteCandidate(init);
-            else if (!host || d.sid === sid) pending.push({ sid: d.sid, init });
-          });
-          if (pending.length > 300) pending = pending.slice(-300);
-        },
-        (err) => fail('ice subscription', err)
-      )
-    );
-
-    // Offers, answers and reconnect requests travel on the room document.
-    unsubs.push(onSnapshot(roomRef(code), (snap) => onRoom(snap.data()), (err) => fail('signal subscription', err)));
-
-    if (host) await negotiate();
-    else await recover('guest start'); // A reload cannot reuse the host's already-answered offer.
+    terminalFailed = false;
+    attemptIssue = null;
+    status('exchange');
+    const version = ++controlVersion;
+    try {
+      // Auth/cache/credential refresh belongs exclusively to the ICE helper.
+      if (!await refreshConfig(force, version)) return;
+      unsubs.push(onSnapshot(roomRef(code), (snap) => onRoom(snap.data()), (err) => fail('signal subscription', err)));
+      if (host) await negotiate();
+      else await recover('guest start', force); // A reload needs a fresh offer.
+    } catch {
+      if (!closed && version === controlVersion) {
+        started = false;
+        unsubs.splice(0).forEach((u) => u());
+        fail('call configuration', new Error('Unable to load call configuration. Reconnect to retry.'));
+      }
+    }
   }
 
   function onRoom(data) {
     if (!data || closed) return;
 
     if (host) {
+      receivePacket(data[otherIceField], sid);
       const a = data.answer;
       if (a?.sdp && a.sid === sid && a.sdp !== seenAnswer && pc?.signalingState === 'have-local-offer') {
         seenAnswer = a.sdp;
         const conn = pc;
         const mySid = sid;
         conn.setRemoteDescription({ type: 'answer', sdp: a.sdp })
-          .then(() => { if (current(conn, mySid)) return drain(conn, mySid); })
+          .then(() => {
+            if (!current(conn, mySid)) return;
+            if (!terminalFailed) status(connected(conn) ? 'connected' : 'connecting');
+            return drain(conn, mySid);
+          })
           .catch((err) => {
             if (!current(conn, mySid)) return;
             seenAnswer = '';
@@ -12507,12 +13083,18 @@ function createCall({ code, seat, onRemote, onLocal, onStatus, onError }) {
       if (lastKick === undefined) lastKick = kick;
       else if (kick !== lastKick) {
         lastKick = kick;
-        recover('kick');
+        if (typeof kick === 'string' && kick.startsWith('manual:')) {
+          retries = 0;
+          recover('manual', true);
+        } else recover('kick');
       }
       return;
     }
 
     const o = data.offer;
+    // Read the packet BEFORE adopting the offer: early candidates survive the
+    // asynchronous setRemoteDescription, including packets in the offer write.
+    receivePacket(data[otherIceField], o?.sid);
     if (o?.sdp && o.sid && o.sid !== sid) answerOffer(o);
   }
 
@@ -12525,6 +13107,8 @@ function createCall({ code, seat, onRemote, onLocal, onStatus, onError }) {
     const mySid = sid;
     seenAnswer = '';
     pending = [];
+    remoteSid = mySid;
+    remoteSeen.clear();
 
     let conn;
     try {
@@ -12540,9 +13124,8 @@ function createCall({ code, seat, onRemote, onLocal, onStatus, onError }) {
       if (!current(conn, mySid)) return;
       await conn.setLocalDescription(desc);
       if (!current(conn, mySid)) return;
-      await updateDoc(roomRef(code), { offer: { type: desc.type, sdp: desc.sdp, sid: mySid }, answer: null });
+      await publishDescription(conn, mySid, { offer: { type: desc.type, sdp: desc.sdp, sid: mySid }, answer: null });
       if (!current(conn, mySid)) return;
-      sweep(conn, mySid);
     } catch (err) {
       if (current(conn, mySid) || (!conn && !closed && sid === mySid)) fail('offer negotiation', err);
       else console.warn('[arcade] stale offer negotiation', err);
@@ -12552,6 +13135,7 @@ function createCall({ code, seat, onRemote, onLocal, onStatus, onError }) {
   /** Guest: answer the host's latest offer on a fresh connection. */
   async function answerOffer(o) {
     if (closed) return;
+    waitingOffer = false;
     sid = o.sid;
     const mySid = sid;
     pending = pending.filter((p) => p.sid === mySid);
@@ -12574,32 +13158,25 @@ function createCall({ code, seat, onRemote, onLocal, onStatus, onError }) {
       if (!current(conn, mySid)) return;
       await conn.setLocalDescription(desc);
       if (!current(conn, mySid)) return;
-      await updateDoc(roomRef(code), { answer: { type: desc.type, sdp: desc.sdp, sid: mySid } });
+      await publishDescription(conn, mySid, { answer: { type: desc.type, sdp: desc.sdp, sid: mySid } });
       if (!current(conn, mySid)) return;
+      if (!terminalFailed) status(connected(conn) && !waitingOffer ? 'connected' : 'connecting');
     } catch (err) {
       if (current(conn, mySid) || (!conn && !closed && sid === mySid)) fail('answer negotiation', err);
       else console.warn('[arcade] stale answer negotiation', err);
     }
   }
 
-  /** Best effort: clear candidates left over from older sessions. */
-  async function sweep(conn, keepSid) {
-    for (const lane of [0, 1]) {
-      if (!current(conn, keepSid)) return;
-      try {
-        const snap = await getDocs(iceRef(code, lane));
-        if (!current(conn, keepSid)) return;
-        await Promise.all(snap.docs.filter((d) => d.data()?.sid !== keepSid).map((d) => deleteDoc(d.ref)));
-        if (!current(conn, keepSid)) return;
-      } catch (err) { console.warn('[arcade] candidate cleanup', err); }
-    }
-  }
-
   /** Manual "Reconnect" — resets the retry budget too. */
   function reconnect() {
+    if (closed) return;
     retries = 0;
-    lastNegotiation = 0;
-    recover('manual');
+    if (!started || !unsubs.length) {
+      // Manual retry can supersede an unresolved initial helper request too.
+      started = false;
+      return start(true);
+    }
+    return recover('manual', true);
   }
 
   /* ------------------------------ devices ------------------------------ */
@@ -12716,8 +13293,10 @@ function createCall({ code, seat, onRemote, onLocal, onStatus, onError }) {
   function close() {
     if (closed) return;
     closed = true;
+    controlVersion += 1;
     clearWatchdog();
     clearRecovery();
+    if (pc) clearTimeout(packets.get(pc)?.timer);
     wanted.audio = wanted.video = false;
     deviceVersion.audio += 1;
     deviceVersion.video += 1;
@@ -12731,6 +13310,7 @@ function createCall({ code, seat, onRemote, onLocal, onStatus, onError }) {
     pc = null;
     tx.audio = tx.video = null;
     pending = [];
+    remoteSeen.clear();
     onLocal?.(null);
     onRemote?.(remote);
     status('closed');
@@ -12745,22 +13325,23 @@ function createCall({ code, seat, onRemote, onLocal, onStatus, onError }) {
     get cam() { return cam; },
     get mic() { return mic; },
     get localStream() { return local; },
-    get remoteStream() { return remote; }
+    get remoteStream() { return remote; },
+    get diagnostics() { return { ...diagnostic }; }
   };
 }
 return Object.freeze({ canCall, createCall });
   })();
 
   /* ===== js/views/games.js ===== */
-  const __m40 = (function () {
+  const __m41 = (function () {
 const { esc, haptic, initials } = __m1;
 const { icon } = __m3;
 const { toast, modal, confetti } = __m2;
 const store = __m8;
 const { navigate, currentQuery } = __m6;
-const { GAMES, gameById } = __m19;
-const rooms = __m41;
-const { createCall, canCall } = __m42;
+const { GAMES, gameById } = __m20;
+const rooms = __m42;
+const { createCall, canCall } = __m43;
 /**
  * LifeFlow — Games.
  * A small arcade: play the computer, or send someone a link and play them
@@ -13124,6 +13705,7 @@ function openRoom({ code, game, seat, state, level, room }) {
   lastQuery = `${code}|`;
   session.unsub = rooms.watchRoom(code, onRoomChange, onRoomGone);
   repaint();
+  tick(); // Resume forced moves/rematch UI when rejoining an unchanged board.
 }
 
 /* =========================================================
@@ -13931,6 +14513,8 @@ function startCall() {
         const audio = q('[data-audio-remote]');
         if (audio) audio.srcObject = new MediaStream(stream.getAudioTracks());
       }
+      // Safari can receive the track before it is unmuted; retry on that event.
+      v.play?.().catch(() => {});
       if (sig) playRemote();
       syncDock();
     },
@@ -13946,6 +14530,11 @@ function startCall() {
     onStatus: (state) => {
       if (session !== s) return;
       s.status = state;
+      syncDock();
+    },
+    onDiagnostic: (diagnostic) => {
+      if (session !== s) return;
+      s.callDiagnostic = diagnostic;
       syncDock();
     },
     onError: (err) => { if (session === s) toast(roomError(err, 'The video link could not be opened.'), 'error'); }
@@ -14018,6 +14607,7 @@ async function toggleDevice(kind) {
 }
 
 const STATE_LABEL = {
+  exchange: 'Setting up the call…',
   connecting: 'Connecting…',
   connected: 'Connected',
   disconnected: 'Reconnecting…',
@@ -14034,6 +14624,8 @@ function syncDock() {
   const note = dock.querySelector('[data-callnote]');
   if (note) note.textContent = !canCall()
     ? 'Open the app over HTTPS (or localhost) and allow camera/microphone access in your browser.'
+    : s.callDiagnostic?.issue && s.status !== 'connected'
+    ? s.callDiagnostic.issue
     : s.status === 'failed'
     ? 'Call connection failed. Try Reconnect. Mobile and restricted networks may require a configured TURN relay; the game and chat still work.'
     : 'Mic alone is a voice call; add the camera for video. Allow device access when your browser asks.';
@@ -14042,6 +14634,8 @@ function syncDock() {
       ? 'Not available here'
       : !s.room?.guestUid
       ? 'Waiting for your friend'
+      : s.status === 'connected' && s.callDiagnostic?.selectedPath
+      ? `Connected · ${s.callDiagnostic.selectedPath === 'relay' ? 'relay' : 'direct'}`
       : STATE_LABEL[s.status] || 'Connecting…';
   }
 
@@ -14067,7 +14661,7 @@ return Object.freeze({ meta, unmount, render });
   })();
 
   /* ===== js/views/prayer.js ===== */
-  const __m43 = (function () {
+  const __m45 = (function () {
 const { esc, ymd, today, addDays, pct, haptic } = __m1;
 const { icon } = __m3;
 const { ring, animateProgress, toast, confetti, confirmDialog } = __m2;
@@ -14413,7 +15007,7 @@ return Object.freeze({ meta, render });
   })();
 
   /* ===== js/quran.js ===== */
-  const __m45 = (function () {
+  const __m47 = (function () {
 const { esc } = __m1;
 const { icon } = __m3;
 const { navigate, currentPath } = __m6;
@@ -14897,13 +15491,13 @@ return Object.freeze({ RECITERS, TAFSIRS, qprefs, saveQprefs, isMarked, toggleMa
   })();
 
   /* ===== js/views/quran.js ===== */
-  const __m44 = (function () {
+  const __m46 = (function () {
 const { esc, debounce } = __m1;
 const { icon } = __m3;
 const { toast } = __m2;
 const { currentQuery, navigate } = __m6;
-const { isOpen: isPaletteOpen } = __m12;
-const { RECITERS, TAFSIRS, BASMALA, qprefs, saveQprefs, surahList, surahText, surahTafsir, player, arNum, plainArabic, isMarked, toggleMark, tafsirOf, reciterOf } = __m45;
+const { isOpen: isPaletteOpen } = __m13;
+const { RECITERS, TAFSIRS, BASMALA, qprefs, saveQprefs, surahList, surahText, surahTafsir, player, arNum, plainArabic, isMarked, toggleMark, tafsirOf, reciterOf } = __m47;
 /**
  * LifeFlow — Qur'an: read and listen at the same time.
  *
@@ -15540,13 +16134,13 @@ return Object.freeze({ meta, render, unmount });
   })();
 
   /* ===== js/views/notes.js ===== */
-  const __m46 = (function () {
+  const __m48 = (function () {
 const { esc, toMillis, timeAgo, debounce, ymd } = __m1;
 const { icon } = __m3;
 const { modal, toast, confirmDialog } = __m2;
 const store = __m8;
 const { MOODS } = __m4;
-const { openNoteForm } = __m14;
+const { openNoteForm } = __m15;
 /**
  * LifeFlow — Notes & Journal.
  */
@@ -15728,7 +16322,7 @@ return Object.freeze({ meta, render });
   })();
 
   /* ===== js/views/archive.js ===== */
-  const __m47 = (function () {
+  const __m49 = (function () {
 const { esc, fmtMoney, today, pct } = __m1;
 const { icon } = __m3;
 const { ring, animateProgress } = __m2;
@@ -16019,16 +16613,17 @@ return Object.freeze({ meta, render });
   })();
 
   /* ===== js/views/profile.js ===== */
-  const __m48 = (function () {
+  const __m50 = (function () {
 const { esc, initials, downloadJSON, toMillis, timeAgo } = __m1;
 const { icon } = __m3;
 const { theme, modal, toast, confirmDialog, withLoading, animateProgress } = __m2;
 const store = __m8;
+const { setActivityConsent } = __m10;
 const { ACCENTS, THEME_GROUPS, CURRENCIES, APP, GOOGLE } = __m4;
 const { navigate } = __m6;
-const { openBreathe } = __m13;
-const notify = __m10;
-const gcal = __m11;
+const { openBreathe } = __m14;
+const notify = __m11;
+const gcal = __m12;
 const { auth, storage, storageRef, uploadBytes, getDownloadURL, updateProfile, updatePassword, reauthenticateWithCredential, EmailAuthProvider, sendPasswordResetEmail, signOut, authErrorMessage } = __m7;
 /**
  * LifeFlow — Profile & settings.
@@ -16044,10 +16639,12 @@ const { auth, storage, storageRef, uploadBytes, getDownloadURL, updateProfile, u
 
 
 
+
 const meta = { title: 'Profile', icon: 'user', label: 'Profile' };
 
 /** Kept so the notification / sync panels can redraw themselves after a change. */
 let mountRoot = null;
+let activitySave = null;
 
 function render(root) {
   mountRoot = root;
@@ -16245,6 +16842,20 @@ function render(root) {
       <!-- Account -->
       <section class="card">
         <div class="card__head"><h3 class="card__title">${icon('shield')} Account & data</h3></div>
+
+        <div class="setting">
+          <span class="setting__icon">${icon('shield')}</span>
+          <div class="setting__text"><b id="activity-sharing-label">Share activity with administrators</b><span>Optional · off by default</span></div>
+          <label class="switch">
+            <input type="checkbox" data-activity-sharing aria-labelledby="activity-sharing-label" aria-describedby="activity-sharing-notice" ${(activitySave?.uid === s.uid ? activitySave.on : p.activitySharing === true) ? 'checked' : ''} ${activitySave?.uid === s.uid ? 'disabled' : ''} />
+            <span class="switch__track"><span class="switch__thumb"></span></span>
+          </label>
+        </div>
+        <div id="activity-sharing-notice" class="fs-sm t-dim mt-2">
+          <p>Opt in to let administrators see action type and feature, server-receive time, coarse browser/device information, and your observed IP address. Activity reports never include passwords, notes, messages, file contents, item IDs, or room codes.</p>
+          <p class="mt-2">Detailed activity logs and IP addresses expire after 30 days. Aggregate counts without those details remain linked to your account while it exists; they are not anonymous. You can revoke consent anytime. Previously recorded details remain until their 30-day expiry, not another 30 days after revocation.</p>
+          <p class="mt-2">Current saved-item counts and account metadata are independent of this setting. Saving this preference does not confirm delivery: the activity backend may be unavailable or not deployed. Reporting is skipped when opened from a local file.</p>
+        </div>
 
         <button class="setting" data-change-pw type="button" style="width:100%;text-align:left">
           <span class="setting__icon">${icon('lock')}</span>
@@ -16458,6 +17069,36 @@ function googleCalendarCard() {
 /* ------------------------------ behaviour ------------------------------ */
 function bind(root) {
   root.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => navigate(b.dataset.go)));
+
+  root.querySelector('[data-activity-sharing]')?.addEventListener('change', async (e) => {
+    const input = e.currentTarget;
+    const uid = store.state.uid;
+    const on = input.checked === true;
+    if (!uid || activitySave?.uid === uid) return;
+    const request = { uid, on };
+    activitySave = request;
+    if (!on) setActivityConsent(uid, false);
+    input.disabled = true;
+    try {
+      await store.savePrefs({ activitySharing: on });
+      if (uid !== store.state.uid) return;
+      toast(on ? 'Activity preference saved. Delivery depends on service availability.' : 'Activity sharing preference saved as off.', 'info', 5000);
+    } catch {
+      if (uid !== store.state.uid) return;
+      input.checked = store.prefs().activitySharing === true;
+      toast(on ? 'Could not save activity consent. Reporting remains off in this page.' : 'Reporting stopped in this page, but the server preference could not be disabled. Please retry.', 'error', 7000);
+    } finally {
+      if (activitySave === request) activitySave = null;
+      if (uid === store.state.uid) {
+        // Store snapshots can replace the original control while saving.
+        const current = root.querySelector('[data-activity-sharing]');
+        if (current) {
+          current.disabled = false;
+          current.checked = store.prefs().activitySharing === true;
+        }
+      }
+    }
+  });
 
   root.querySelectorAll('[data-theme-pref]').forEach((b) =>
     b.addEventListener('click', (e) => {
@@ -16738,28 +17379,30 @@ const { initRipples, theme, toast } = __m2;
 const { route, setGuard, setNotFound, startRouter, resolve, navigate } = __m6;
 const { auth, onAuthStateChanged } = __m7;
 const store = __m8;
-const { initNotifications } = __m10;
-const { initGoogleCalendar } = __m11;
-const { initPalette, isOpen: isPaletteOpen } = __m12;
-const { renderLanding, renderLogin, renderSignup, renderForgot, hidePublic } = __m15;
-const { initShell, showApp, mountPage, unmountPage } = __m16;
-const dashboard = __m17;
-const tasks = __m34;
-const calendarPage = __m35;
-const finance = __m36;
-const purchases = __m37;
-const goals = __m38;
-const habits = __m39;
-const games = __m40;
-const prayer = __m43;
-const quran = __m44;
-const { player: quranPlayer } = __m45;
-const notes = __m46;
-const archive = __m47;
-const profile = __m48;
+const { initNotifications } = __m11;
+const { initGoogleCalendar } = __m12;
+const { initPalette, isOpen: isPaletteOpen } = __m13;
+const { recordActivity } = __m10;
+const { renderLanding, renderLogin, renderSignup, renderForgot, hidePublic } = __m16;
+const { initShell, showApp, mountPage, unmountPage } = __m17;
+const dashboard = __m18;
+const tasks = __m35;
+const calendarPage = __m36;
+const finance = __m37;
+const purchases = __m38;
+const goals = __m39;
+const habits = __m40;
+const games = __m41;
+const prayer = __m45;
+const quran = __m46;
+const { player: quranPlayer } = __m47;
+const notes = __m48;
+const archive = __m49;
+const profile = __m50;
 /**
  * LifeFlow — application bootstrap.
  */
+
 
 
 
@@ -16929,7 +17572,17 @@ function hideSplash() {
 /* =========================================================
    Global niceties
    ========================================================= */
+let globalsBound = false;
 function bindGlobals() {
+  if (globalsBound) return;
+  globalsBound = true;
+  window.addEventListener('lf:navigated', (e) => {
+    if (!session.user || session.user.uid !== auth.currentUser?.uid) return;
+    const raw = e.detail?.path;
+    if (typeof raw !== 'string') return;
+    const path = raw.split(/[?#]/, 1)[0];
+    if (PRIVATE_PAGES.some(([known]) => known === path)) recordActivity('page_view', path.slice(1));
+  });
   // Keyboard shortcuts (desktop)
   document.addEventListener('keydown', (e) => {
     if (e.target.matches('input, textarea, select, [contenteditable]')) return;

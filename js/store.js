@@ -36,6 +36,7 @@ import {
 import { ymd, today, addDays, toMillis, pct, clamp } from './utils.js';
 import { BADGES } from './config.js';
 import { PRAYERS, DEFAULT_PRAYER_PREFS } from './prayer.js';
+import { recordActivity, setActivityConsent } from './activity.js';
 
 const COLLECTIONS = ['tasks', 'events', 'goals', 'savings', 'txns', 'purchases', 'habits', 'notes', 'moods', 'prayers'];
 
@@ -43,6 +44,7 @@ const COLLECTIONS = ['tasks', 'events', 'goals', 'savings', 'txns', 'purchases',
 const DATE_KEYED = ['moods', 'prayers'];
 
 const DEFAULT_PREFS = {
+  activitySharing: false,
   currency: 'USD',
   theme: 'light',
   accent: 'violet',
@@ -94,6 +96,10 @@ export const state = {
 
 const listeners = new Set();
 let unsubs = [];
+let connectionGeneration = 0;
+let confirmedActivitySharing = false;
+let activityLocallyDisabled = false;
+let activityPreferenceGeneration = 0;
 
 export function subscribe(fn) {
   listeners.add(fn);
@@ -111,12 +117,14 @@ function emit() {
    ========================================================= */
 export async function connect(user) {
   disconnect();
+  const connection = connectionGeneration;
   state.uid = user.uid;
   state.user = user;
   state.loading = true;
   emit();
 
   await ensureProfile(user);
+  if (connection !== connectionGeneration || state.uid !== user.uid) return;
 
   const pending = new Set(COLLECTIONS);
   const settle = (name) => {
@@ -132,14 +140,29 @@ export async function connect(user) {
   unsubs.push(
     onSnapshot(
       doc(db, 'users', user.uid),
+      { includeMetadataChanges: true },
       (snap) => {
+        if (connection !== connectionGeneration || state.uid !== user.uid) return;
         state.profile = { id: snap.id, ...(snap.data() || {}) };
         state.profile.prefs = { ...DEFAULT_PREFS, ...(state.profile.prefs || {}) };
         state.profile.prefs.widgets = { ...DEFAULT_PREFS.widgets, ...(state.profile.prefs.widgets || {}) };
         state.profile.prefs.prayer = { ...DEFAULT_PRAYER_PREFS, ...(state.profile.prefs.prayer || {}) };
+        // Cached/optimistic true is not consent confirmation from the server.
+        const shared = state.profile.prefs.activitySharing === true;
+        if (!snap.metadata?.hasPendingWrites && !snap.metadata?.fromCache) {
+          confirmedActivitySharing = shared;
+          setActivityConsent(user.uid, shared && !activityLocallyDisabled);
+        } else if (!shared) {
+          setActivityConsent(user.uid, false);
+        }
         emit();
       },
-      (err) => console.warn('[store] profile snapshot', err)
+      (err) => {
+        if (connection !== connectionGeneration) return;
+        confirmedActivitySharing = false;
+        setActivityConsent(user.uid, false);
+        console.warn('[store] profile snapshot', err);
+      }
     )
   );
 
@@ -150,10 +173,12 @@ export async function connect(user) {
       onSnapshot(
         q,
         (snap) => {
+          if (connection !== connectionGeneration) return;
           state[name] = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
           settle(name);
         },
         (err) => {
+          if (connection !== connectionGeneration) return;
           console.warn(`[store] ${name} snapshot`, err);
           settle(name);
         }
@@ -163,6 +188,10 @@ export async function connect(user) {
 }
 
 export function disconnect() {
+  setActivityConsent(null, false);
+  connectionGeneration++;
+  confirmedActivitySharing = false;
+  activityLocallyDisabled = false;
   unsubs.forEach((u) => { try { u(); } catch { /* ignore */ } });
   unsubs = [];
   state.uid = null;
@@ -205,16 +234,22 @@ function docRef(name, id) {
 }
 
 export async function create(name, data) {
+  const uid = state.uid;
+  const connection = connectionGeneration;
   const ref = await addDoc(colRef(name), {
     ...data,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp()
   });
+  if (uid === state.uid && uid === auth.currentUser?.uid && connection === connectionGeneration) recordActivity('create', name);
   return ref.id;
 }
 
 export async function update(name, id, patch) {
+  const uid = state.uid;
+  const connection = connectionGeneration;
   await updateDoc(docRef(name, id), { ...patch, updatedAt: serverTimestamp() });
+  if (uid === state.uid && uid === auth.currentUser?.uid && connection === connectionGeneration) recordActivity('update', name);
 }
 
 /**
@@ -228,6 +263,9 @@ export function setEventDeleteHook(fn) {
 }
 
 export async function remove(name, id, { skipRemote = false } = {}) {
+  const uid = state.uid;
+  const connection = connectionGeneration;
+  const ref = docRef(name, id);
   if (name === 'events' && eventDeleteHook && !skipRemote) {
     const ev = state.events.find((e) => e.id === id);
     if (ev?.gcalId) {
@@ -238,18 +276,43 @@ export async function remove(name, id, { skipRemote = false } = {}) {
       }
     }
   }
-  await deleteDoc(docRef(name, id));
+  await deleteDoc(ref);
+  if (uid === state.uid && uid === auth.currentUser?.uid && connection === connectionGeneration) recordActivity('delete', name);
 }
 
 export async function updateProfileDoc(patch) {
+  const uid = state.uid;
+  const connection = connectionGeneration;
   await setDoc(doc(db, 'users', state.uid), { ...patch, updatedAt: serverTimestamp() }, { merge: true });
+  if (uid === state.uid && uid === auth.currentUser?.uid && connection === connectionGeneration) recordActivity('update', 'profile');
 }
 
 export async function savePrefs(patch) {
+  const uid = state.uid;
+  const connection = connectionGeneration;
+  const changesConsent = Object.prototype.hasOwnProperty.call(patch, 'activitySharing');
+  const preference = changesConsent ? ++activityPreferenceGeneration : activityPreferenceGeneration;
+  if (changesConsent) {
+    // Latch off through pending writes, rollback snapshots, and failed revocations.
+    activityLocallyDisabled = true;
+    setActivityConsent(uid, false);
+  }
   const prefs = { ...(state.profile?.prefs || DEFAULT_PREFS), ...patch };
   state.profile = { ...(state.profile || {}), prefs };
   emit();
-  await updateProfileDoc({ prefs });
+  try {
+    await updateProfileDoc({ prefs });
+    if (changesConsent && preference === activityPreferenceGeneration && uid === state.uid && uid === auth.currentUser?.uid && connection === connectionGeneration) {
+      activityLocallyDisabled = patch.activitySharing !== true;
+      setActivityConsent(uid, confirmedActivitySharing && !activityLocallyDisabled);
+    }
+  } catch (err) {
+    if (changesConsent && preference === activityPreferenceGeneration && uid === state.uid && connection === connectionGeneration) {
+      state.profile.prefs.activitySharing = confirmedActivitySharing;
+      emit();
+    }
+    throw err;
+  }
 }
 
 export function prefs() {

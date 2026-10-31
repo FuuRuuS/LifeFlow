@@ -5,6 +5,7 @@ import { esc, initials, downloadJSON, toMillis, timeAgo } from '../utils.js';
 import { icon } from '../icons.js';
 import { theme, modal, toast, confirmDialog, withLoading, animateProgress } from '../ui.js';
 import * as store from '../store.js';
+import { setActivityConsent } from '../activity.js';
 import { ACCENTS, THEME_GROUPS, CURRENCIES, APP, GOOGLE } from '../config.js';
 import { navigate } from '../router.js';
 import { openBreathe } from './breathe.js';
@@ -29,6 +30,7 @@ export const meta = { title: 'Profile', icon: 'user', label: 'Profile' };
 
 /** Kept so the notification / sync panels can redraw themselves after a change. */
 let mountRoot = null;
+let activitySave = null;
 
 export function render(root) {
   mountRoot = root;
@@ -226,6 +228,20 @@ export function render(root) {
       <!-- Account -->
       <section class="card">
         <div class="card__head"><h3 class="card__title">${icon('shield')} Account & data</h3></div>
+
+        <div class="setting">
+          <span class="setting__icon">${icon('shield')}</span>
+          <div class="setting__text"><b id="activity-sharing-label">Share activity with administrators</b><span>Optional · off by default</span></div>
+          <label class="switch">
+            <input type="checkbox" data-activity-sharing aria-labelledby="activity-sharing-label" aria-describedby="activity-sharing-notice" ${(activitySave?.uid === s.uid ? activitySave.on : p.activitySharing === true) ? 'checked' : ''} ${activitySave?.uid === s.uid ? 'disabled' : ''} />
+            <span class="switch__track"><span class="switch__thumb"></span></span>
+          </label>
+        </div>
+        <div id="activity-sharing-notice" class="fs-sm t-dim mt-2">
+          <p>Opt in to let administrators see action type and feature, server-receive time, coarse browser/device information, and your observed IP address. Activity reports never include passwords, notes, messages, file contents, item IDs, or room codes.</p>
+          <p class="mt-2">Detailed activity logs and IP addresses expire after 30 days. Aggregate counts without those details remain linked to your account while it exists; they are not anonymous. You can revoke consent anytime. Previously recorded details remain until their 30-day expiry, not another 30 days after revocation.</p>
+          <p class="mt-2">Current saved-item counts and account metadata are independent of this setting. Saving this preference does not confirm delivery: the activity backend may be unavailable or not deployed. Reporting is skipped when opened from a local file.</p>
+        </div>
 
         <button class="setting" data-change-pw type="button" style="width:100%;text-align:left">
           <span class="setting__icon">${icon('lock')}</span>
@@ -439,6 +455,36 @@ function googleCalendarCard() {
 /* ------------------------------ behaviour ------------------------------ */
 function bind(root) {
   root.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => navigate(b.dataset.go)));
+
+  root.querySelector('[data-activity-sharing]')?.addEventListener('change', async (e) => {
+    const input = e.currentTarget;
+    const uid = store.state.uid;
+    const on = input.checked === true;
+    if (!uid || activitySave?.uid === uid) return;
+    const request = { uid, on };
+    activitySave = request;
+    if (!on) setActivityConsent(uid, false);
+    input.disabled = true;
+    try {
+      await store.savePrefs({ activitySharing: on });
+      if (uid !== store.state.uid) return;
+      toast(on ? 'Activity preference saved. Delivery depends on service availability.' : 'Activity sharing preference saved as off.', 'info', 5000);
+    } catch {
+      if (uid !== store.state.uid) return;
+      input.checked = store.prefs().activitySharing === true;
+      toast(on ? 'Could not save activity consent. Reporting remains off in this page.' : 'Reporting stopped in this page, but the server preference could not be disabled. Please retry.', 'error', 7000);
+    } finally {
+      if (activitySave === request) activitySave = null;
+      if (uid === store.state.uid) {
+        // Store snapshots can replace the original control while saving.
+        const current = root.querySelector('[data-activity-sharing]');
+        if (current) {
+          current.disabled = false;
+          current.checked = store.prefs().activitySharing === true;
+        }
+      }
+    }
+  });
 
   root.querySelectorAll('[data-theme-pref]').forEach((b) =>
     b.addEventListener('click', (e) => {

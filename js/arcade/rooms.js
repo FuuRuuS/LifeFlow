@@ -9,6 +9,7 @@ import {
   db, doc, collection, setDoc, updateDoc, deleteDoc, onSnapshot, getDocs, serverTimestamp, runTransaction
 } from '../firebase.js';
 import * as store from '../store.js';
+import { recordActivity } from '../activity.js';
 
 /** Unambiguous alphabet — no O/0 or I/1 to misread down the phone. */
 const ALPHABET = 'ACDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -86,6 +87,7 @@ export async function createRoom({ gameId, level, state }) {
     updatedAt: serverTimestamp()
   });
 
+  if (who.uid === store.state.uid) recordActivity('game_create', 'games');
   return code;
 }
 
@@ -93,7 +95,7 @@ export async function joinRoom(code) {
   const who = me();
   if (!who.uid) throw new Error('Sign in to join the game.');
 
-  return runTransaction(db, async (tx) => {
+  const result = await runTransaction(db, async (tx) => {
     const snap = await tx.get(roomRef(code));
     if (!snap.exists()) throw new Error('That game could not be found — the link may have expired.');
 
@@ -120,6 +122,8 @@ export async function joinRoom(code) {
     });
     return { seat: 1, data: { ...data, ...seated, media, rematch } };
   });
+  if (who.uid === store.state.uid) recordActivity('game_join', 'games');
+  return result;
 }
 
 export function watchRoom(code, onChange, onGone) {
@@ -138,6 +142,7 @@ export function watchRoom(code, onChange, onGone) {
 
 /* ------------------------------ play ------------------------------ */
 export async function pushState(code, { state, outcome, seq }) {
+  const uid = store.state.uid;
   await runTransaction(db, async (tx) => {
     const snap = await tx.get(roomRef(code));
     if (!snap.exists()) throw new Error('The game was closed.');
@@ -152,6 +157,7 @@ export async function pushState(code, { state, outcome, seq }) {
       updatedAt: serverTimestamp()
     });
   });
+  if (uid && uid === store.state.uid) recordActivity('game_move', 'games');
 }
 
 export async function pushRematch(code, seat, on) {
@@ -226,6 +232,7 @@ async function wipeSignals(code) {
 
 export async function leaveRoom(code, seat) {
   if (!code) return;
+  const uid = store.state.uid;
   try {
     if (seat === 0) {
       await wipeSignals(code);
@@ -243,6 +250,7 @@ export async function leaveRoom(code, seat) {
         updatedAt: serverTimestamp()
       });
     }
+    if (uid && uid === store.state.uid) recordActivity('game_leave', 'games');
   } catch (err) {
     console.warn('[arcade] leave', err);
   }

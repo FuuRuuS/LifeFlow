@@ -131,12 +131,10 @@ Rules ([firestore.rules](firestore.rules), [storage.rules](storage.rules)): only
 - Mic and camera start **off** for privacy. Each person turns on the devices they
   want to share and accepts their browser's permission prompt. If audio autoplay
   is blocked, use **Tap to hear your friend**. Voice works without a camera.
-- **TURN is required for reliable calls across different networks.** The current
-  `RTC.iceServers` setting in [js/config.js](js/config.js) is empty, so the app has
-  STUN but no relay. Supply a working TURN service, ideally with UDP and TLS/TCP
-  on port 443. Use provider-issued short-lived client credentials; never embed a
-  provider API secret in this public frontend. Production credential renewal
-  requires a trusted backend. A TURN service is not included in this repository.
+- **TURN is required for reliable calls across different networks.** An authenticated
+  Cloudflare TURN credential backend is now included, but it needs owner-provided
+  secrets and deployment. Follow [SETUP-VOICE-VIDEO.md](SETUP-VOICE-VIDEO.md).
+  Permissions alone cannot establish a cross-network media connection.
 - **Reconnect** opens a new signaling session without changing the game. Game
   moves and chat use Firestore independently of the voice/video connection.
 - Room claims and moves now use transactions. Offline or conflicting writes
@@ -149,6 +147,23 @@ WebRTC peers in headless Edge/Chromium with **synthetic** camera/microphone inpu
 and in-memory signaling. Set `ARCADE_BROWSER` if the browser is installed outside
 the usual Windows locations. These checks do not contact Firebase or verify its
 deployed rules, physical devices, or connectivity across separate networks.
+
+### Private account dashboard
+
+[statadmnaccprvt.html](statadmnaccprvt.html) provides server-protected, code-only
+access to account metadata, current item counts and opt-in activity statistics.
+Passwords are never accessible. IPs are masked unless explicitly revealed, and
+detailed events/IPs have a 30-day read-retention limit. Activity sharing is off by
+default under Profile → Account & data. No previous history is backfilled.
+
+**Without Firebase Functions:** follow [SETUP-PRIVATE-SERVER.md](SETUP-PRIVATE-SERVER.md).
+The private Node server checks your code and serves the dashboard. Its Windows
+launcher prompts securely for the code; no browser code or Secret Manager is needed.
+Authorized Firebase Admin credentials are still necessary to read existing accounts.
+
+[SETUP-PRIVATE-ADMIN.md](SETUP-PRIVATE-ADMIN.md) covers the optional Functions
+deployment and shared privacy/security requirements. The HTML alone is not an
+admin backend. Nothing has been automatically deployed.
 
 ---
 

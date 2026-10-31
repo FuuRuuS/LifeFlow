@@ -135,7 +135,7 @@ function database(initial) {
 function roomClient(db, uid, tab) {
   const storage = new Map([['lf:tab', tab]]);
   return loadSource('js/arcade/rooms.js', {
-    ...db.mocks, crypto: webcrypto,
+    ...db.mocks, crypto: webcrypto, recordActivity: () => {},
     store: { state: { uid, profile: { name: uid } } },
     sessionStorage: { getItem: (key) => storage.get(key), setItem: (key, val) => storage.set(key, val) }
   }, 'joinRoom, pushState, restart');

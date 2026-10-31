@@ -9,6 +9,7 @@ import * as store from './store.js';
 import { initNotifications } from './notify.js';
 import { initGoogleCalendar } from './gcal.js';
 import { initPalette, isOpen as isPaletteOpen } from './palette.js';
+import { recordActivity } from './activity.js';
 
 import { renderLanding, renderLogin, renderSignup, renderForgot, hidePublic } from './views/public.js';
 import { initShell, showApp, mountPage, unmountPage } from './views/shell.js';
@@ -170,7 +171,17 @@ function hideSplash() {
 /* =========================================================
    Global niceties
    ========================================================= */
+let globalsBound = false;
 function bindGlobals() {
+  if (globalsBound) return;
+  globalsBound = true;
+  window.addEventListener('lf:navigated', (e) => {
+    if (!session.user || session.user.uid !== auth.currentUser?.uid) return;
+    const raw = e.detail?.path;
+    if (typeof raw !== 'string') return;
+    const path = raw.split(/[?#]/, 1)[0];
+    if (PRIVATE_PAGES.some(([known]) => known === path)) recordActivity('page_view', path.slice(1));
+  });
   // Keyboard shortcuts (desktop)
   document.addEventListener('keydown', (e) => {
     if (e.target.matches('input, textarea, select, [contenteditable]')) return;

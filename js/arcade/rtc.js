@@ -12,16 +12,9 @@
  * signals from an older connection. Candidates that arrive before the
  * description they belong to are queued instead of dropped.
  */
-import { updateDoc, onSnapshot, addDoc, getDocs, deleteDoc } from '../firebase.js';
-import { roomRef, iceRef, newCode } from './rooms.js';
-import { RTC } from '../config.js';
-
-const STUN = { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] };
-
-function iceConfig() {
-  const extra = Array.isArray(RTC?.iceServers) ? RTC.iceServers.filter((s) => s && s.urls) : [];
-  return { iceServers: [STUN, ...extra], iceCandidatePoolSize: 2 };
-}
+import { updateDoc, onSnapshot } from '../firebase.js';
+import { roomRef, newCode } from './rooms.js';
+import { loadIceConfig } from './ice.js';
 
 /** Plain, Firestore-safe copy of a candidate. */
 function packCandidate(c, sid) {
@@ -43,13 +36,15 @@ function unpackCandidate(d) {
 }
 
 const AUTO_RETRIES = 3;
+const MAX_CANDIDATES = 80;
+const ICE_BATCH_MS = 100;
 
 export const canCall = () =>
   typeof RTCPeerConnection !== 'undefined' &&
   Boolean(navigator.mediaDevices?.getUserMedia) &&
   (location.protocol === 'https:' || location.protocol === 'file:' || ['localhost', '127.0.0.1'].includes(location.hostname));
 
-export function createCall({ code, seat, onRemote, onLocal, onStatus, onError }) {
+export function createCall({ code, seat, onRemote, onLocal, onStatus, onError, onDiagnostic }) {
   const host = seat === 0;
   const remote = new MediaStream();
   const tx = { audio: null, video: null };
@@ -69,18 +64,55 @@ export function createCall({ code, seat, onRemote, onLocal, onStatus, onError })
   let retries = 0;
   let watchdog = null;
   let recoveryTimer = null;
+  let recoveryWork = null;
+  let controlVersion = 0;
+  let loadedConfig = null;
+  let waitingOffer = false;
+  let terminalFailed = false;
+  let configIssue = null;
+  let attemptIssue = null;
+  let remoteSid = '';
+  const remoteSeen = new Set();
+  const packets = new WeakMap();
+  const ownIceField = host ? 'rtcIceHost' : 'rtcIceGuest';
+  const otherIceField = host ? 'rtcIceGuest' : 'rtcIceHost';
+  // One write lane across ALL sessions. A previously in-flight packet must
+  // finish before a new offer/answer can publish its replacement packet.
+  let roomWork = Promise.resolve();
+  const diagnostic = {
+    phase: 'exchange', relayAvailable: false, relayCandidate: false,
+    remoteCandidates: 0, issue: null, selectedPath: null
+  };
+  let lastDiagnostic = '';
   const acquiring = { audio: null, video: null };
   const wanted = { audio: false, video: false };
   const deviceVersion = { audio: 0, video: 0 };
   const senderWork = new WeakMap();
 
-  const status = (s) => { if (!closed || s === 'closed') onStatus?.(s); };
+  function report() {
+    if (closed) return;
+    diagnostic.issue = attemptIssue || configIssue;
+    const key = JSON.stringify(diagnostic);
+    if (key === lastDiagnostic) return;
+    lastDiagnostic = key;
+    onDiagnostic?.({ ...diagnostic });
+  }
+  const status = (s) => {
+    if (closed && s !== 'closed') return;
+    diagnostic.phase = s;
+    onStatus?.(s);
+    report();
+  };
   const current = (conn, mySid) => !closed && conn && pc === conn && sid === mySid &&
     conn.signalingState !== 'closed' && conn.connectionState !== 'closed';
 
   function fail(context, err) {
     console.warn('[arcade]', context, err);
     if (closed) return;
+    clearWatchdog();
+    clearRecovery();
+    terminalFailed = true;
+    attemptIssue = 'Call setup failed. Reconnect to try again.';
     status('failed');
     onError?.(err);
   }
@@ -88,6 +120,9 @@ export function createCall({ code, seat, onRemote, onLocal, onStatus, onError })
   function attachRemote(track) {
     if (closed || remote.getTracks().includes(track)) return;
     remote.addTrack(track);
+    track.addEventListener('unmute', () => {
+      if (!closed && remote.getTracks().includes(track)) onRemote?.(remote);
+    });
     track.addEventListener('ended', () => {
       if (closed || !remote.getTracks().includes(track)) return;
       try { remote.removeTrack(track); } catch { /* already gone */ }
@@ -110,49 +145,227 @@ export function createCall({ code, seat, onRemote, onLocal, onStatus, onError })
     recoveryTimer = null;
   }
 
-  /** Ask for a fresh connection: the host renegotiates, the guest nudges the host. */
-  function recover(reason) {
+  function queueRoomWrite(guard, work) {
+    const next = roomWork.catch(() => {}).then(() => {
+      if (!closed && guard()) return work();
+    });
+    roomWork = next;
+    return next;
+  }
+
+  async function refreshConfig(force, version) {
+    const result = await loadIceConfig(code, { force });
+    if (closed || version !== controlVersion) return false;
+    loadedConfig = result.config;
+    diagnostic.relayAvailable = Boolean(result.relayAvailable);
+    configIssue = result.warning?.message || (!result.relayAvailable
+      ? 'No TURN relay is available. Direct connections may fail on restricted networks.' : null);
+    report(); // Persistent diagnostic, never an onError/toast for a helper warning.
+    return true;
+  }
+
+  function connected(conn) {
+    return conn && !['failed', 'disconnected', 'closed'].includes(conn.iceConnectionState) &&
+      (conn.connectionState === 'connected' ||
+      ((!conn.connectionState || conn.connectionState === 'new' || conn.connectionState === 'connecting') &&
+        ['connected', 'completed'].includes(conn.iceConnectionState)));
+  }
+
+  function exhausted() {
+    clearWatchdog();
+    clearRecovery();
+    terminalFailed = true;
+    attemptIssue = (host && !pc?.remoteDescription) || (!host && (waitingOffer || !pc))
+      ? 'Signaling received no answer or fresh offer. Both players should refresh, then reconnect.'
+      : !diagnostic.relayAvailable
+        ? 'Connection failed after retries: no TURN relay is available.'
+        : !diagnostic.relayCandidate
+          ? 'Connection failed after retries: no TURN relay candidate was obtained.'
+          : 'Connection failed after retries. Check the network and reconnect manually.';
+    status('failed');
+  }
+
+  /** Automatic kicks share a finite budget; only an explicit manual retry resets it. */
+  function recover(reason, force = false) {
     if (closed) return;
+    if (!force && recoveryWork) return recoveryWork;
+    // Do not let another automatic kick replace a queued manual refresh.
+    if (!force && recoveryTimer) return;
+    clearWatchdog();
+    clearRecovery();
+    const version = ++controlVersion;
+    if (reason !== 'manual' && reason !== 'guest start' && retries >= AUTO_RETRIES) {
+      exhausted();
+      return;
+    }
     if (host) {
       const delay = 3000 - (Date.now() - lastNegotiation);
       if (delay > 0) {
-        if (!recoveryTimer) recoveryTimer = setTimeout(() => {
+        recoveryTimer = setTimeout(() => {
           recoveryTimer = null;
-          recover(reason);
+          if (!closed && version === controlVersion) recover(reason, force);
         }, delay);
         return;
       }
-      return negotiate();
-    } else {
-      return updateDoc(roomRef(code), { rtcKick: newCode(8) })
-        .catch((err) => fail('reconnect request', err));
     }
+    if (reason !== 'manual' && reason !== 'guest start') retries += 1;
+    terminalFailed = false;
+    attemptIssue = null;
+    status('exchange');
+    scheduleRecovery(pc, 25000, 'timeout');
+    const work = (async () => {
+      try {
+        if (!await refreshConfig(force, version)) return;
+        if (host) await negotiate();
+        else {
+          waitingOffer = true;
+          // Prefix distinguishes user intent from automatic kicks: random
+          // automatic IDs alone must never reset the host's retry budget.
+          await queueRoomWrite(() => version === controlVersion, () =>
+            updateDoc(roomRef(code), { rtcKick: `${force ? 'manual:' : ''}${newCode(8)}` }));
+          if (closed || version !== controlVersion) return;
+          scheduleRecovery(pc, 25000, 'timeout');
+        }
+      } catch {
+        if (!closed && version === controlVersion) {
+          fail('call recovery', new Error('Unable to prepare the call. Reconnect to retry.'));
+        }
+      }
+    })();
+    recoveryWork = work;
+    work.finally(() => { if (recoveryWork === work) recoveryWork = null; });
+    return work;
   }
 
   function scheduleRecovery(conn, delay, reason) {
     const mySid = sid;
-    if (!current(conn, mySid)) return;
-    clearWatchdog();
-    if (retries >= AUTO_RETRIES) return;
+    const active = () => conn ? current(conn, mySid) : !closed && !pc && sid === mySid;
+    if (!active() || terminalFailed) return;
+    // Repeated ICE/connection events must not postpone the original deadline.
+    if (watchdog) return;
     watchdog = setTimeout(() => {
       watchdog = null;
-      if (!current(conn, mySid) || conn.connectionState === 'connected') return;
-      retries += 1;
-      recover(reason);
+      if (!active() || connected(conn) && !waitingOffer && !recoveryWork) return;
+      if (recoveryWork) {
+        // Offline Firestore writes may remain pending indefinitely. Do not
+        // silently consume the only watchdog while a recovery is still busy.
+        controlVersion += 1;
+        fail('call timeout', new Error('Call signaling timed out. Reconnect to retry.'));
+      } else if (retries >= AUTO_RETRIES) exhausted();
+      else recover(reason);
     }, delay);
+  }
+
+  function packetValue(state, mySid) {
+    return { sid: mySid, candidates: state.candidates.slice(0, MAX_CANDIDATES) };
+  }
+
+  function scheduleIce(conn, mySid) {
+    const state = packets.get(conn);
+    if (!current(conn, mySid) || !state?.published || state.timer || state.inFlight ||
+        state.sent >= state.candidates.length) return;
+    state.timer = setTimeout(() => {
+      state.timer = null;
+      flushIce(conn, mySid);
+    }, ICE_BATCH_MS);
+  }
+
+  async function flushIce(conn, mySid) {
+    const state = packets.get(conn);
+    if (!current(conn, mySid) || !state?.published || state.inFlight ||
+        state.sent >= state.candidates.length) return;
+    state.inFlight = true;
+    try {
+      await queueRoomWrite(() => current(conn, mySid), async () => {
+        const packet = packetValue(state, mySid);
+        await updateDoc(roomRef(code), { [ownIceField]: packet });
+        if (current(conn, mySid)) state.sent = packet.candidates.length;
+      });
+    } catch {
+      if (current(conn, mySid)) {
+        state.published = false; // Stop a failing write loop; manual recovery can retry.
+        fail('ICE signaling', new Error('Unable to exchange call candidates. Reconnect to retry.'));
+      }
+    } finally {
+      state.inFlight = false;
+      scheduleIce(conn, mySid);
+    }
+  }
+
+  async function publishDescription(conn, mySid, fields) {
+    const state = packets.get(conn);
+    await queueRoomWrite(() => current(conn, mySid), async () => {
+      const packet = packetValue(state, mySid);
+      await updateDoc(roomRef(code), { ...fields, [ownIceField]: packet });
+      if (!current(conn, mySid)) return;
+      state.sent = packet.candidates.length;
+      state.published = true;
+    });
+    // Candidates gathered while setLocalDescription/updateDoc was pending
+    // remain cumulative and are flushed only AFTER the description is written.
+    scheduleIce(conn, mySid);
+  }
+
+  function receivePacket(packet, expectedSid) {
+    if (!expectedSid || packet?.sid !== expectedSid || !Array.isArray(packet.candidates)) return;
+    if (remoteSid !== expectedSid) {
+      remoteSid = expectedSid;
+      remoteSeen.clear();
+      pending = pending.filter((p) => p.sid === expectedSid);
+    }
+    for (const d of packet.candidates.slice(0, MAX_CANDIDATES)) {
+      if (!d || typeof d.candidate !== 'string' || !d.candidate || (d.sid && d.sid !== expectedSid)) continue;
+      const init = unpackCandidate(d);
+      const key = JSON.stringify(init);
+      if (remoteSeen.has(key) || remoteSeen.size >= MAX_CANDIDATES) continue;
+      remoteSeen.add(key);
+      if (pc && sid === expectedSid && pc.remoteDescription) addRemoteCandidate(init);
+      else pending.push({ sid: expectedSid, init });
+    }
+    diagnostic.remoteCandidates = remoteSeen.size;
+    report();
+  }
+
+  async function selectedPath(conn, mySid) {
+    try {
+      const stats = await conn.getStats();
+      if (!current(conn, mySid) || !connected(conn)) return;
+      let pair;
+      stats.forEach((s) => {
+        if (s.type === 'transport' && s.selectedCandidatePairId) pair = stats.get(s.selectedCandidatePairId) || pair;
+      });
+      if (!pair) stats.forEach((s) => {
+        if (s.type === 'candidate-pair' && (s.selected || s.nominated && s.state === 'succeeded')) pair = s;
+      });
+      if (!pair) return;
+      const localCandidate = stats.get(pair.localCandidateId);
+      const remoteCandidate = stats.get(pair.remoteCandidateId);
+      if (!localCandidate?.candidateType || !remoteCandidate?.candidateType) return;
+      diagnostic.selectedPath = [localCandidate, remoteCandidate].some((s) => s.candidateType === 'relay') ? 'relay' : 'direct';
+      report();
+    } catch { /* Some Safari versions do not expose selected-pair stats. */ }
   }
 
   function buildPc() {
     if (closed) return null;
     clearWatchdog();
-    if (pc) { try { pc.close(); } catch { /* noop */ } }
+    if (pc) {
+      clearTimeout(packets.get(pc)?.timer);
+      try { pc.close(); } catch { /* noop */ }
+    }
     clearRemote();
     tx.audio = null;
     tx.video = null;
 
-    const conn = new RTCPeerConnection(iceConfig());
+    const conn = new RTCPeerConnection(loadedConfig);
     const mySid = sid;
     pc = conn;
+    packets.set(conn, { candidates: [], keys: new Set(), published: false, sent: 0, timer: null, inFlight: false });
+    terminalFailed = false;
+    attemptIssue = null;
+    diagnostic.relayCandidate = false;
+    diagnostic.remoteCandidates = remoteSid === mySid ? remoteSeen.size : 0;
+    diagnostic.selectedPath = null;
 
     conn.addEventListener('track', (ev) => {
       if (!current(conn, mySid)) return;
@@ -161,23 +374,51 @@ export function createCall({ code, seat, onRemote, onLocal, onStatus, onError })
 
     conn.addEventListener('icecandidate', (ev) => {
       if (!ev.candidate || !current(conn, mySid)) return;
-      addDoc(iceRef(code, seat), packCandidate(ev.candidate, mySid))
-        .catch((err) => console.warn('[arcade] publish candidate', err));
+      if (ev.candidate.type === 'relay' || /\btyp relay\b/.test(ev.candidate.candidate || '')) {
+        diagnostic.relayCandidate = true;
+        report();
+      }
+      const state = packets.get(conn);
+      const candidate = packCandidate(ev.candidate, mySid);
+      const key = JSON.stringify(candidate);
+      if (!candidate.candidate || state.keys.has(key) || state.candidates.length >= MAX_CANDIDATES) return;
+      state.keys.add(key);
+      state.candidates.push(candidate);
+      scheduleIce(conn, mySid);
     });
 
-    conn.addEventListener('connectionstatechange', () => {
+    conn.addEventListener('icecandidateerror', (ev) => {
+      if (!current(conn, mySid) || terminalFailed || !/^turns?:/i.test(ev.url || '')) return;
+      // STUN errors (including per-interface 701s) are not proof of TURN failure.
+      // Never surface the event URL, address, errorText, or credentials.
+      attemptIssue = 'A TURN relay request failed. Direct connection is still being attempted.';
+      report();
+    });
+
+    const stateChanged = () => {
       if (!current(conn, mySid)) return;
       const st = conn.connectionState;
-      status(st === 'new' ? 'connecting' : st);
-      if (st === 'connected') { retries = 0; clearWatchdog(); }
-      else if (st === 'failed') scheduleRecovery(conn, host ? 600 : 2500, 'failed');
-      else if (st === 'disconnected') scheduleRecovery(conn, 7000, 'disconnected');
-    });
+      const ice = conn.iceConnectionState;
+      if (connected(conn) && !waitingOffer) {
+        terminalFailed = false;
+        if (!recoveryWork) clearWatchdog();
+        // A queued kick/manual retry still needs a NEW session, even if the
+        // old peer briefly connects during the host's cooldown.
+        status('connected');
+        selectedPath(conn, mySid);
+      } else if (!terminalFailed) {
+        status(conn.remoteDescription ? 'connecting' : 'exchange');
+        if (st === 'failed' || ice === 'failed') scheduleRecovery(conn, host ? 600 : 2500, 'failed');
+        else if (st === 'disconnected' || ice === 'disconnected') scheduleRecovery(conn, 7000, 'disconnected');
+      }
+    };
+    conn.addEventListener('connectionstatechange', stateChanged);
+    conn.addEventListener('iceconnectionstatechange', stateChanged);
 
     // Never connected at all — try a fresh negotiation once in a while.
     scheduleRecovery(conn, 25000, 'timeout');
     onRemote?.(remote);
-    status('connecting');
+    status('exchange');
     return conn;
   }
 
@@ -234,49 +475,44 @@ export function createCall({ code, seat, onRemote, onLocal, onStatus, onError })
     }
   }
 
-  async function start() {
+  async function start(force = false) {
     if (started || closed || !canCall()) return;
     started = true;
-    status('connecting');
-
-    // The other side's candidates — queued until their description is in place.
-    unsubs.push(
-      onSnapshot(
-        iceRef(code, host ? 1 : 0),
-        (snap) => {
-          if (closed) return;
-          snap.docChanges().forEach((change) => {
-            if (change.type !== 'added') return;
-            const d = change.doc.data();
-            if (!d?.sid || !d.candidate) return; // stale signals from an older version
-            const init = unpackCandidate(d);
-            if (pc && d.sid === sid && pc.remoteDescription) addRemoteCandidate(init);
-            else if (!host || d.sid === sid) pending.push({ sid: d.sid, init });
-          });
-          if (pending.length > 300) pending = pending.slice(-300);
-        },
-        (err) => fail('ice subscription', err)
-      )
-    );
-
-    // Offers, answers and reconnect requests travel on the room document.
-    unsubs.push(onSnapshot(roomRef(code), (snap) => onRoom(snap.data()), (err) => fail('signal subscription', err)));
-
-    if (host) await negotiate();
-    else await recover('guest start'); // A reload cannot reuse the host's already-answered offer.
+    terminalFailed = false;
+    attemptIssue = null;
+    status('exchange');
+    const version = ++controlVersion;
+    try {
+      // Auth/cache/credential refresh belongs exclusively to the ICE helper.
+      if (!await refreshConfig(force, version)) return;
+      unsubs.push(onSnapshot(roomRef(code), (snap) => onRoom(snap.data()), (err) => fail('signal subscription', err)));
+      if (host) await negotiate();
+      else await recover('guest start', force); // A reload needs a fresh offer.
+    } catch {
+      if (!closed && version === controlVersion) {
+        started = false;
+        unsubs.splice(0).forEach((u) => u());
+        fail('call configuration', new Error('Unable to load call configuration. Reconnect to retry.'));
+      }
+    }
   }
 
   function onRoom(data) {
     if (!data || closed) return;
 
     if (host) {
+      receivePacket(data[otherIceField], sid);
       const a = data.answer;
       if (a?.sdp && a.sid === sid && a.sdp !== seenAnswer && pc?.signalingState === 'have-local-offer') {
         seenAnswer = a.sdp;
         const conn = pc;
         const mySid = sid;
         conn.setRemoteDescription({ type: 'answer', sdp: a.sdp })
-          .then(() => { if (current(conn, mySid)) return drain(conn, mySid); })
+          .then(() => {
+            if (!current(conn, mySid)) return;
+            if (!terminalFailed) status(connected(conn) ? 'connected' : 'connecting');
+            return drain(conn, mySid);
+          })
           .catch((err) => {
             if (!current(conn, mySid)) return;
             seenAnswer = '';
@@ -288,12 +524,18 @@ export function createCall({ code, seat, onRemote, onLocal, onStatus, onError })
       if (lastKick === undefined) lastKick = kick;
       else if (kick !== lastKick) {
         lastKick = kick;
-        recover('kick');
+        if (typeof kick === 'string' && kick.startsWith('manual:')) {
+          retries = 0;
+          recover('manual', true);
+        } else recover('kick');
       }
       return;
     }
 
     const o = data.offer;
+    // Read the packet BEFORE adopting the offer: early candidates survive the
+    // asynchronous setRemoteDescription, including packets in the offer write.
+    receivePacket(data[otherIceField], o?.sid);
     if (o?.sdp && o.sid && o.sid !== sid) answerOffer(o);
   }
 
@@ -306,6 +548,8 @@ export function createCall({ code, seat, onRemote, onLocal, onStatus, onError })
     const mySid = sid;
     seenAnswer = '';
     pending = [];
+    remoteSid = mySid;
+    remoteSeen.clear();
 
     let conn;
     try {
@@ -321,9 +565,8 @@ export function createCall({ code, seat, onRemote, onLocal, onStatus, onError })
       if (!current(conn, mySid)) return;
       await conn.setLocalDescription(desc);
       if (!current(conn, mySid)) return;
-      await updateDoc(roomRef(code), { offer: { type: desc.type, sdp: desc.sdp, sid: mySid }, answer: null });
+      await publishDescription(conn, mySid, { offer: { type: desc.type, sdp: desc.sdp, sid: mySid }, answer: null });
       if (!current(conn, mySid)) return;
-      sweep(conn, mySid);
     } catch (err) {
       if (current(conn, mySid) || (!conn && !closed && sid === mySid)) fail('offer negotiation', err);
       else console.warn('[arcade] stale offer negotiation', err);
@@ -333,6 +576,7 @@ export function createCall({ code, seat, onRemote, onLocal, onStatus, onError })
   /** Guest: answer the host's latest offer on a fresh connection. */
   async function answerOffer(o) {
     if (closed) return;
+    waitingOffer = false;
     sid = o.sid;
     const mySid = sid;
     pending = pending.filter((p) => p.sid === mySid);
@@ -355,32 +599,25 @@ export function createCall({ code, seat, onRemote, onLocal, onStatus, onError })
       if (!current(conn, mySid)) return;
       await conn.setLocalDescription(desc);
       if (!current(conn, mySid)) return;
-      await updateDoc(roomRef(code), { answer: { type: desc.type, sdp: desc.sdp, sid: mySid } });
+      await publishDescription(conn, mySid, { answer: { type: desc.type, sdp: desc.sdp, sid: mySid } });
       if (!current(conn, mySid)) return;
+      if (!terminalFailed) status(connected(conn) && !waitingOffer ? 'connected' : 'connecting');
     } catch (err) {
       if (current(conn, mySid) || (!conn && !closed && sid === mySid)) fail('answer negotiation', err);
       else console.warn('[arcade] stale answer negotiation', err);
     }
   }
 
-  /** Best effort: clear candidates left over from older sessions. */
-  async function sweep(conn, keepSid) {
-    for (const lane of [0, 1]) {
-      if (!current(conn, keepSid)) return;
-      try {
-        const snap = await getDocs(iceRef(code, lane));
-        if (!current(conn, keepSid)) return;
-        await Promise.all(snap.docs.filter((d) => d.data()?.sid !== keepSid).map((d) => deleteDoc(d.ref)));
-        if (!current(conn, keepSid)) return;
-      } catch (err) { console.warn('[arcade] candidate cleanup', err); }
-    }
-  }
-
   /** Manual "Reconnect" — resets the retry budget too. */
   function reconnect() {
+    if (closed) return;
     retries = 0;
-    lastNegotiation = 0;
-    recover('manual');
+    if (!started || !unsubs.length) {
+      // Manual retry can supersede an unresolved initial helper request too.
+      started = false;
+      return start(true);
+    }
+    return recover('manual', true);
   }
 
   /* ------------------------------ devices ------------------------------ */
@@ -497,8 +734,10 @@ export function createCall({ code, seat, onRemote, onLocal, onStatus, onError })
   function close() {
     if (closed) return;
     closed = true;
+    controlVersion += 1;
     clearWatchdog();
     clearRecovery();
+    if (pc) clearTimeout(packets.get(pc)?.timer);
     wanted.audio = wanted.video = false;
     deviceVersion.audio += 1;
     deviceVersion.video += 1;
@@ -512,6 +751,7 @@ export function createCall({ code, seat, onRemote, onLocal, onStatus, onError })
     pc = null;
     tx.audio = tx.video = null;
     pending = [];
+    remoteSeen.clear();
     onLocal?.(null);
     onRemote?.(remote);
     status('closed');
@@ -526,6 +766,7 @@ export function createCall({ code, seat, onRemote, onLocal, onStatus, onError })
     get cam() { return cam; },
     get mic() { return mic; },
     get localStream() { return local; },
-    get remoteStream() { return remote; }
+    get remoteStream() { return remote; },
+    get diagnostics() { return { ...diagnostic }; }
   };
 }
