@@ -15,7 +15,7 @@ A mobile-first, all-in-one life management web app — tasks, calendar, finances
 | **Purchases** | A wishlist with prices — tick one off and the spend lands in your ledger and comes straight out of your available money |
 | **Goals** | Professional & personal goals with milestones and animated progress |
 | **Habits** | Daily check-ins, streaks, weekly targets, 12-week heatmap |
-| **Games** | Tic-Tac-Toe, Connect Four, Reversi, Dots & Boxes, Memory and Dame (draughts). Play the computer at three strengths, or invite a friend and play live with **text chat, quick reactions, voice (mic only) and video** |
+| **Games** | Party & couple games — **Truth or Dare** (7 decks: ice-breakers, friends, party, couple, flirty, deep, family), **In Sync** (this-or-that matching), **Know Me?** (guess your partner's answers) — plus **Quiz Duel** (10 trivia categories, speed + streak scoring), **Crazy Eights** (cards), **Game of the Goose** (dice race), Tic-Tac-Toe, Connect Four, Reversi, Dots & Boxes, Memory and Dame. Lobby shelves for couples, friends, board, cards and brain games. Play the computer, pass one phone around, or invite someone online with **text chat, quick reactions, voice (mic only) and video** |
 | **Qur’an** | All 114 surahs in Uthmani script, 16 reciters, verse-by-verse audio with the **current verse highlighted and followed**, Arabic tafsir (Al-Muyassar, Al-Jalalayn, Al-Waseet, Al-Baghawi, Al-Qurtubi, Tanwir al-Miqbas) per verse, repeat/speed, bookmarks, search, mini player that keeps playing across pages. Each surah is cached after its first load |
 | **Notes & Journal** | Colour-coded notes, daily journal prompt, mood-linked entries, full-text search |
 | **Profile** | Avatar upload, **28 themes in 5 families** (Classic, Girly, Elegant & classy, Dark luxe, Hacker — with ambient effects), dark/light morph toggle, widget customisation, currency & Pomodoro settings, JSON export |
@@ -163,7 +163,9 @@ js/
     index.js               Game registry + the rules every game implements
     rooms.js               Firestore transport for a shared table (+ capped chat)
     rtc.js                 WebRTC camera/mic call, signalled through the room
-    games/                 tictactoe.js, connect4.js, reversi.js, dots.js, memory.js, dame.js
+    games/                 tictactoe.js, connect4.js, reversi.js, dots.js, memory.js, dame.js,
+                           truthdare.js, insync.js, knowme.js, quiz.js, eights.js, goose.js
+                           (kit.js + pairs.js are shared helpers, not games)
 ```
 
 Each game is a self-contained module: pure state in, pure state out, plus a

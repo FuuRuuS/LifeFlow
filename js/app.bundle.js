@@ -423,6 +423,23 @@ const APP = {
   version: '1.0.0'
 };
 
+/**
+ * Voice & video in Games.
+ *
+ * Google's public STUN servers are always used and connect most home Wi-Fi.
+ * Phones on 4G/5G and strict office/school networks usually also need a TURN
+ * relay. Add one here, using the credentials from your TURN provider
+ * (for example a free Metered.ca or Cloudflare Calls account, or your own coturn):
+ *
+ *   iceServers: [
+ *     { urls: ['turn:YOUR-TURN-HOST:80', 'turn:YOUR-TURN-HOST:443?transport=tcp'],
+ *       username: 'YOUR-USERNAME', credential: 'YOUR-CREDENTIAL' }
+ *   ]
+ */
+const RTC = {
+  iceServers: []
+};
+
 const CURRENCIES = [
   { code: 'USD', symbol: '$' },
   { code: 'TND', symbol: 'dt' },
@@ -550,7 +567,7 @@ const BADGES = [
   { id: 'focused', emoji: '🧘', label: 'Deep Focus', hint: 'Finish 5 focus sessions' },
   { id: 'balanced', emoji: '⚖️', label: 'Balanced', hint: 'Reach 80% life balance' }
 ];
-return Object.freeze({ firebaseConfig, ENABLE_ANALYTICS, GOOGLE, APP, CURRENCIES, TASK_CATEGORIES, PRIORITIES, EVENT_TYPES, GOAL_AREAS, MOODS, THEME_GROUPS, ACCENTS, QUOTES, BADGES });
+return Object.freeze({ firebaseConfig, ENABLE_ANALYTICS, GOOGLE, APP, RTC, CURRENCIES, TASK_CATEGORIES, PRIORITIES, EVENT_TYPES, GOAL_AREAS, MOODS, THEME_GROUPS, ACCENTS, QUOTES, BADGES });
   })();
 
   /* ===== js/fx.js ===== */
@@ -4338,7 +4355,7 @@ const PAGES = [
   { path: '/purchases', label: 'Purchases', icon: 'cart', keywords: 'shopping wish list buy items' },
   { path: '/goals', label: 'Goals', icon: 'target', keywords: 'ambitions milestones' },
   { path: '/habits', label: 'Habits', icon: 'flame', keywords: 'streak routine daily' },
-  { path: '/games', label: 'Games', icon: 'gamepad', keywords: 'play arcade tic-tac-toe memory dame checkers break fun' },
+  { path: '/games', label: 'Games', icon: 'gamepad', keywords: 'play arcade tic-tac-toe memory dame checkers truth dare quiz cards couple friends goose break fun' },
   { path: '/prayer', label: 'Salat', icon: 'mosque', keywords: 'prayer salah namaz adhan', requires: 'prayer' },
   { path: '/quran', label: 'Qur’an', icon: 'quran', keywords: 'quran koran mushaf surah ayah recitation tafsir قرآن تفسير' },
   { path: '/notes', label: 'Journal', icon: 'note', keywords: 'notes diary gratitude' },
@@ -4362,6 +4379,12 @@ const ACTIONS = [
   { label: 'Play Connect Four', icon: 'gamepad', keywords: 'game play four in a row puissance 4 break', run: () => navigate('/games?play=connect4') },
   { label: 'Play Reversi', icon: 'gamepad', keywords: 'game play othello discs break', run: () => navigate('/games?play=reversi') },
   { label: 'Play Dots & Boxes', icon: 'gamepad', keywords: 'game play lines squares pen paper break', run: () => navigate('/games?play=dots') },
+  { label: 'Play Truth or Dare', icon: 'gamepad', keywords: 'game play party couple friends action verite questions', run: () => navigate('/games?play=truthdare') },
+  { label: 'Play In Sync', icon: 'gamepad', keywords: 'game play couple friends this or that same answers match', run: () => navigate('/games?play=insync') },
+  { label: 'Play Know Me?', icon: 'gamepad', keywords: 'game play couple friends guess how well do you know me', run: () => navigate('/games?play=knowme') },
+  { label: 'Play Quiz Duel', icon: 'gamepad', keywords: 'game play trivia quiz questions answers culture', run: () => navigate('/games?play=quiz') },
+  { label: 'Play Crazy Eights', icon: 'gamepad', keywords: 'game play cards huit americain uno deck', run: () => navigate('/games?play=eights') },
+  { label: 'Play Game of the Goose', icon: 'gamepad', keywords: 'game play jeu de l oie dice board race', run: () => navigate('/games?play=goose') },
   { label: 'Listen to the Qur’an', icon: 'quran', keywords: 'quran recitation reciter continue listen surah', run: () => navigate('/quran') },
   { label: 'Read Surat Al-Kahf', icon: 'quran', keywords: 'quran kahf friday surah 18', run: () => navigate('/quran?s=18') },
   { label: 'Ayat al-Kursi', icon: 'quran', keywords: 'quran kursi throne verse 2:255', run: () => navigate('/quran?s=2&a=255') }
@@ -5644,6 +5667,7 @@ const LINES = [
 
 const meta = {
   id: 'tictactoe',
+  group: ['board', 'friends'],
   title: 'Tic-Tac-Toe',
   emoji: '✳️',
   tagline: 'Three in a row, in three breaths.',
@@ -5825,6 +5849,7 @@ const COUNT = PAIRS * 2;
 
 const meta = {
   id: 'memory',
+  group: ['cards', 'brain', 'couple'],
   title: 'Memory',
   emoji: '🃏',
   tagline: 'Sixteen cards, eight quiet pairs.',
@@ -6036,6 +6061,7 @@ const forward = (seat) => (seat === 0 ? -1 : 1);
 
 const meta = {
   id: 'dame',
+  group: ['board', 'brain'],
   title: 'Dame',
   emoji: '⚪',
   tagline: 'Draughts, with room to think.',
@@ -6361,6 +6387,7 @@ const ORDER = [3, 2, 4, 1, 5, 0, 6];
 
 const meta = {
   id: 'connect4',
+  group: ['board', 'friends'],
   title: 'Connect Four',
   emoji: '🔴',
   tagline: 'Drop, block, line up four.',
@@ -6583,6 +6610,7 @@ const WEIGHTS = [
 
 const meta = {
   id: 'reversi',
+  group: ['board', 'brain'],
   title: 'Reversi',
   emoji: '⚫',
   tagline: 'Outflank, flip, take the corners.',
@@ -6812,6 +6840,7 @@ const V = R * (C + 1); // vertical lines
 
 const meta = {
   id: 'dots',
+  group: ['board', 'brain'],
   title: 'Dots & Boxes',
   emoji: '🟦',
   tagline: 'One line at a time. Close it, claim it.',
@@ -7046,6 +7075,2830 @@ function coach(state, ctx) {
 return Object.freeze({ meta, create, turn, apply, outcome, auto, note, ai, view, bind, coach });
   })();
 
+  /* ===== js/arcade/games/kit.js ===== */
+  const __m27 = (function () {
+
+/**
+ * LifeFlow Arcade — small shared helpers for the social and card games.
+ * Pure functions only; nothing here touches the DOM outside the root it is given.
+ */
+
+const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, (c) => ESC[c]);
+}
+
+function rand(n) {
+  return Math.floor(Math.random() * n);
+}
+
+function shuffle(list) {
+  const a = list.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = rand(i + 1);
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+/** Fill {me} / {you} / {name} in a prompt — the names are escaped, the prompt is trusted content. */
+function fill(text, map) {
+  return esc(text).replace(/\{(\w+)\}/g, (m, k) => (k in map ? `<b>${esc(map[k])}</b>` : m));
+}
+
+/**
+ * Draw an unused item from a bank of categories.
+ * bank: { catId: { items: [...] } } — returns { c, i, used } with the pick remembered.
+ */
+function draw(bank, cats, used, list = 'items', cap = 160) {
+  const pool = [];
+  const seen = new Set(used);
+  const live = cats.filter((c) => bank[c]);
+  const ids = live.length ? live : Object.keys(bank);
+  for (const c of ids) {
+    const items = bank[c][list] || [];
+    items.forEach((_, i) => { if (!seen.has(`${c}:${list}:${i}`)) pool.push([c, i]); });
+  }
+  if (!pool.length) {
+    // Everything has been seen — start the deck over.
+    for (const c of ids) (bank[c][list] || []).forEach((_, i) => pool.push([c, i]));
+    used = used.filter((k) => !k.includes(`:${list}:`));
+  }
+  const [c, i] = pool[rand(pool.length)];
+  return { c, i, used: [...used, `${c}:${list}:${i}`].slice(-cap) };
+}
+
+/** Category chips — toggles when `live`, otherwise a quiet read-out. */
+function catChips(bank, cats, live) {
+  return `
+    <div class="xcats${live ? '' : ' is-locked'}" role="group" aria-label="Categories">
+      ${Object.entries(bank)
+        .map(
+          ([id, c]) => `<button type="button" class="xcat" data-cat="${id}" aria-pressed="${cats.includes(id)}" ${live ? '' : 'disabled'}>
+                          <span aria-hidden="true">${c.emoji}</span>${esc(c.label)}
+                        </button>`
+        )
+        .join('')}
+    </div>`;
+}
+
+function bindCats(root, cats, play) {
+  root.querySelectorAll('[data-cat]').forEach((b) =>
+    b.addEventListener('click', () => {
+      const id = b.dataset.cat;
+      const next = cats.includes(id) ? cats.filter((c) => c !== id) : [...cats, id];
+      if (next.length) play({ cats: next });
+    })
+  );
+}
+
+function validCats(bank, cats) {
+  return Array.isArray(cats) && cats.length > 0 && cats.length <= 20 && cats.every((c) => typeof c === 'string' && bank[c]);
+}
+
+/** Round progress — a row of beads, filled as the game moves along. */
+function beads(done, total, current = -1) {
+  return `<div class="xbeads" aria-label="Round ${Math.min(done + 1, total)} of ${total}">${Array.from({ length: total }, (_, i) =>
+    `<i class="${i < done ? 'is-done' : ''}${i === current ? ' is-now' : ''}"></i>`
+  ).join('')}</div>`;
+}
+
+/** A short burst of floating emoji inside `host` — purely decorative. */
+function burst(host, glyphs, n = 14) {
+  if (!host || !host.isConnected) return;
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+  const layer = document.createElement('div');
+  layer.className = 'xburst';
+  layer.setAttribute('aria-hidden', 'true');
+  for (let i = 0; i < n; i++) {
+    const s = document.createElement('span');
+    s.textContent = glyphs[i % glyphs.length];
+    s.style.setProperty('--x', `${Math.round((Math.random() - 0.5) * 260)}px`);
+    s.style.setProperty('--y', `${Math.round(-80 - Math.random() * 160)}px`);
+    s.style.setProperty('--r', `${Math.round((Math.random() - 0.5) * 120)}deg`);
+    s.style.setProperty('--d', `${Math.round(Math.random() * 240)}ms`);
+    layer.appendChild(s);
+  }
+  host.appendChild(layer);
+  setTimeout(() => layer.remove(), 1700);
+}
+return Object.freeze({ esc, rand, shuffle, fill, draw, catChips, bindCats, validCats, beads, burst });
+  })();
+
+  /* ===== js/arcade/games/truthdare.js ===== */
+  const __m26 = (function () {
+const { esc, fill, draw, catChips, bindCats, validCats, beads, burst } = __m27;
+/**
+ * LifeFlow Arcade — Truth or Dare.
+ * A social card game: the performer picks Truth or Dare, the other player judges.
+ * Nine decks, from icebreakers to after dark. Truths score 1, dares score 2 (configurable).
+ */
+
+
+const ROUNDS = 12;
+const POINTS = { truth: 1, dare: 2 };
+
+/** Per-game rules that travel inside the state, so both players share them. */
+const roundsOf = (s) => s.rounds || ROUNDS;
+const pointsOf = (s, kind) => (kind === 'dare' ? s.darePts || POINTS.dare : POINTS.truth);
+
+const DECKS = {
+  ice: {
+    label: 'Icebreakers', emoji: '❄️',
+    truths: [
+      'What is the best thing that happened to you this month?',
+      'Morning person or night owl — and why?',
+      'What hobby would you love to try one day?',
+      'What was your very first job (or chore you got paid for)?',
+      'What is the most interesting place you have ever visited?',
+      'Which book, film or series do you recommend to everyone?',
+      'What is your go-to comfort food?',
+      'With no limits at all, what would your dream job be?',
+      'What is a skill you are surprisingly good at?',
+      'Which three words would your friends use to describe you?',
+      'What is the best advice you have ever received?',
+      'What always makes your day a little better?',
+      'What is the most spontaneous thing you have ever done?',
+      'Which famous person would you love to have dinner with?',
+      'What is a small thing that instantly annoys you?',
+      'What did you want to be when you were ten?',
+      'What is the last thing that made you laugh out loud?',
+      'What would your perfect Sunday look like?',
+      'Which song would play when you walk into a room?',
+      'Cats, dogs, or neither — defend your answer.',
+      'What is something you believed as a child that turned out to be false?',
+      'What is the best compliment a stranger ever gave you?',
+      'If you could master one skill overnight, what would it be?',
+      'What is the most adventurous food you have tried?',
+      'What is your most-used phrase?'
+    ],
+    dares: [
+      'Tell {you} two truths and a lie — {you} has to spot the lie.',
+      'Share your best fun fact, with full documentary voice.',
+      'Introduce yourself as if you were a famous athlete at a press conference.',
+      'Describe your day using only emojis — say them out loud.',
+      'Teach {you} a word in another language and make them repeat it.',
+      'Tell the story behind your name in 30 seconds.',
+      'Make three guesses about {you}. They tell you how many you got right.',
+      'Pitch your favourite food like a TV salesperson.',
+      'Draw your dream house in 30 seconds and present it.',
+      'Find something blue nearby and present it like a museum masterpiece.',
+      'Do your best impression of a famous person — {you} has three guesses.',
+      'Show {you} your favourite app and sell it to them in 20 seconds.',
+      'Say a tongue twister three times fast.',
+      'Give {you} a nickname and use it until the end of the game.',
+      'Do your best catwalk to the kitchen and back.',
+      'Describe your job (or studies) like a nature documentary.',
+      'Speak in rhymes until your next turn.',
+      'Show {you} the oldest photo on your phone.',
+      'Invent a new handshake and teach it to {you}.',
+      'Talk for 30 seconds about a random object {you} points at.',
+      'Do your best robot dance for 15 seconds.',
+      'Let {you} ask you three rapid-fire questions — no thinking allowed.',
+      'Sing “happy birthday” in the style of an opera singer.',
+      'Balance a book on your head until your next turn starts.'
+    ]
+  },
+  friends: {
+    label: 'Friends', emoji: '🤝',
+    truths: [
+      'What is the most embarrassing thing you have done in front of {you}?',
+      'What is a hidden talent nobody here knows about?',
+      'What is the worst gift you ever got — did you pretend to love it?',
+      'What is the pettiest reason you ever stopped talking to someone?',
+      'If you swapped lives with {you} for a day, what would you do first?',
+      'What is the last little lie you told?',
+      'What is your most irrational fear?',
+      'Who was your first celebrity crush?',
+      'What is the silliest thing you have ever cried over?',
+      'Which habit of {you} secretly makes you laugh?',
+      'What is the most useless thing you know by heart?',
+      'What is the weirdest food combo you actually enjoy?',
+      'What is the funniest misunderstanding you have been part of?',
+      'What is the meanest thing you have ever thought about {you}?',
+      'Who here would you never trust with a secret — and why?',
+      'What is something you pretend to like but secretly hate?',
+      'What is the most embarrassing thing in your search history?',
+      'Have you ever stalked an ex online? How deep did you go?',
+      'What is the worst thing you have ever said behind someone’s back?',
+      'What is the most childish thing you did this year?',
+      'Which friend would you drop first in a survival show?',
+      'What is the biggest lie you told your parents?',
+      'Have you ever read someone else’s messages without permission?',
+      'What is something about {you} that you would change if you could?',
+      'What is the most awkward date you have been on?',
+      'What is the worst text you sent to the wrong person?'
+    ],
+    dares: [
+      'Do your best impression of {you} until they guess who it is.',
+      'Show the last photo in your camera roll — or describe it honestly.',
+      'Talk like a pirate until your next turn.',
+      'Sing the chorus of the last song you listened to.',
+      'Let {you} choose your phone wallpaper for the next 24 hours.',
+      'Do 15 jumping jacks while reciting the alphabet.',
+      'Speak only in questions until your next turn.',
+      'Give {you} a dramatic movie-trailer introduction.',
+      'Try to touch your nose with your tongue for 10 seconds.',
+      'Tell a joke. If {you} does not laugh, try another one.',
+      'Act out your most-used emoji until {you} guesses it.',
+      'Do a 20-second runway walk across the room.',
+      'Read your last sent message in a dramatic theatre voice.',
+      'Roast {you} for 30 seconds — no mercy, but keep it funny.',
+      'Let {you} post a story on your social media (they choose, you approve).',
+      'Show {you} your screen time for this week.',
+      'Let {you} read the last five things you searched for.',
+      'Call a friend and sing them a song for 15 seconds.',
+      'Send a “I miss you” text to the third person in your contacts.',
+      'Let {you} draw a tiny moustache on your face (or hand).',
+      'Eat a spoonful of something {you} picks from the kitchen.',
+      'Do your most embarrassing dance move — full commitment.',
+      'Let {you} change your profile picture for one hour.',
+      'Imitate {you} ordering food at a restaurant.',
+      'Give {you} your phone, unlocked, for 60 seconds.',
+      'Wear your clothes inside out until the end of the game.'
+    ]
+  },
+  party: {
+    label: 'Party', emoji: '🎉',
+    truths: [
+      'What is the most awkward thing that happened to you at a party?',
+      'Have you ever sung the wrong lyrics with total confidence?',
+      'Which app eats most of your time — be honest about the hours.',
+      'Who in your life would survive longest in a zombie apocalypse?',
+      'What is the most childish thing you still do?',
+      'What was your most questionable fashion phase?',
+      'Have you ever blamed someone else for something you did?',
+      'What is the strangest thing you have ever searched online?',
+      'If you were a pop star, what would your stage name be?',
+      'Which song do you secretly love but would never admit?',
+      'What is the silliest thing you have spent money on?',
+      'What is the longest you have stayed awake, and why?',
+      'What is the most trouble you have ever been in?',
+      'What is the craziest thing you have done on a dare?',
+      'Have you ever been kicked out of somewhere? Where?',
+      'What is the worst thing you have done at a wedding or a party?',
+      'Who was the last person you ghosted — and why?',
+      'What is your most embarrassing moment on social media?',
+      'What is the most money you have wasted in one night?',
+      'Have you ever pretended to be sick to skip something? What?',
+      'What rumour about you was actually true?',
+      'What is your worst habit that nobody knows about?',
+      'Have you ever fallen asleep somewhere totally inappropriate?',
+      'What is the wildest thing on your bucket list?'
+    ],
+    dares: [
+      'Dance with no music for 20 seconds.',
+      'Announce {you} like a boxing champion entering the ring.',
+      'Make a funny face and hold it while {you} counts to 10.',
+      'Moonwalk — or at least try — across the room.',
+      'Report on this game like a breaking-news anchor.',
+      'Do your best evil-villain laugh.',
+      'Hold a plank for 30 seconds while {you} cheers you on.',
+      'Sing everything you say until your next turn.',
+      'Perform your last text message as an opera.',
+      'Walk like a penguin to the door and back.',
+      'Act out an animal of {you}\u2019s choosing for 20 seconds.',
+      'Do a slow-motion replay of your last goal… in any sport.',
+      'Do your best twerk — or your best attempt — for 10 seconds.',
+      'Let {you} give you a new hairstyle with whatever is around.',
+      'Talk in an accent {you} chooses until your next turn.',
+      'Do a dramatic soap-opera breakup scene with {you}.',
+      'Attempt a cartwheel, a split or a handstand — your choice.',
+      'Let {you} tickle you for 10 seconds without laughing.',
+      'Drink a glass of water without using your hands.',
+      'Rap about {you} for 20 seconds.',
+      'Do your best impression of your mother or father on the phone.',
+      'Let {you} send one emoji to anyone in your contacts.',
+      'Pretend to be a famous influencer filming a product review.',
+      'Freeze in a funny pose until your next turn — or until you laugh.',
+      'Lick your elbow. (Good luck.)'
+    ]
+  },
+  couple: {
+    label: 'Couple', emoji: '💞',
+    truths: [
+      'What was your very first impression of {you}?',
+      'When did you realise you really liked {you}?',
+      'What is your favourite memory of the two of you?',
+      'What small thing does {you} do that makes your day?',
+      'What have you always wanted to tell {you} but never did?',
+      'Which song reminds you of {you}?',
+      'Where is your dream trip together?',
+      'Which habit of {you} do you secretly find adorable?',
+      'What were you thinking about on your first date?',
+      'What is one thing you would love to do together more often?',
+      'Where do you see the two of you in five years?',
+      'What is the best gift {you} has ever given you?',
+      'What made you smile about {you} this week?',
+      'What is something {you} does that you secretly love watching?',
+      'What was the moment you knew {you} was special?',
+      'What is the most jealous you have ever been in our relationship?',
+      'What is one habit of {you} that drives you a little crazy?',
+      'What is your favourite photo of us, and why?',
+      'What do you still want to discover about {you}?',
+      'What is something you have never told {you} about your past?',
+      'What is the sweetest thing {you} has ever said to you?',
+      'If you could relive one day with {you}, which one?',
+      'What scares you most about our future?',
+      'What is your secret nickname for {you} in your head?',
+      'What is the best kiss we have ever had? Describe it.'
+    ],
+    dares: [
+      'Give {you} a 30-second shoulder massage.',
+      'Look {you} in the eyes and name three things you love about them.',
+      'Take a silly selfie together right now.',
+      'Slow dance with {you} through one chorus — music optional.',
+      'Write a two-line love poem for {you} and read it aloud.',
+      'Hold hands and look into each other\u2019s eyes for 30 seconds without laughing.',
+      'Do your best impression of {you} waking up in the morning.',
+      'Plan your next date out loud in 60 seconds.',
+      'Give {you} a sincere compliment in a terrible accent.',
+      'Serenade {you} with any song for 15 seconds.',
+      'Draw a portrait of {you} in 60 seconds and gift it to them.',
+      'Make {you} a drink or a snack of their choice.',
+      'Give {you} a forehead kiss and say why you are grateful for them.',
+      'Recreate your first photo together.',
+      'Feed {you} a bite of something — slowly.',
+      'Give {you} a foot massage for 60 seconds.',
+      'Tell {you} the story of how you met, as a fairy tale.',
+      'Let {you} choose your outfit for tomorrow.',
+      'Write “I love you” somewhere on {you} with your finger. They guess the words.',
+      'Kiss {you} like it is the end of a romantic film.',
+      'Whisper your favourite memory of {you} in their ear.',
+      'Plan a surprise for {you} this week and tell them only one clue.',
+      'Compliment {you} non-stop for 30 seconds.',
+      'Carry {you} (or try to) for five steps.'
+    ]
+  },
+  flirty: {
+    label: 'Flirty', emoji: '🌶️',
+    truths: [
+      'What was the exact moment you first thought “I want to kiss {you}”?',
+      'If you had to seduce {you} with one sentence, what would it be? Say it — looking at them.',
+      'What is the flirtiest thought you have had about {you} today?',
+      'When did you last check {you} out without them noticing? What were you looking at?',
+      'Eyes, smile, voice, hands or confidence — which one is your weakness, and why?',
+      'What does {you} do without realising that you find completely irresistible?',
+      'Which part of {you} would you write a poem about? Give us the first line.',
+      'What is the most daring message you have typed — and then deleted?',
+      'What compliment from {you} would make you melt on the spot?',
+      'What is your secret move when you want to seduce someone — and has it worked on {you}?',
+      'Which outfit do you wear when you want to be noticed? Has {you} noticed?',
+      'Rate your last kiss with {you} out of 10 — and say exactly what would make it an 11.',
+      'If {you} were a dessert, which one would they be — and how would you eat it?',
+      'What is the most tempting moment between you and {you} that nobody else noticed?',
+      'What do you secretly want {you} to whisper to you?',
+      'A look, a touch or a word — what gives you butterflies fastest?',
+      'Where would you take {you} if you wanted the night to end with a kiss you will never forget?',
+      'Which song makes you think of {you} in a way you would not explain to your parents?',
+      'What is the best kiss of your life — where, when, and what made it perfect?',
+      'What is one thing you would love {you} to wear on your next date — or not wear?',
+      'On a scale of 1 to 10, how much do you want to kiss {you} right now? Justify the number.',
+      'What is your favourite way to be woken up?',
+      'What would you do if {you} whispered “follow me” right now?',
+      'Have you ever had a dream about {you} you would blush to describe? Give us a hint.',
+      'What is the cheekiest thing you have ever done to get someone’s attention?',
+      'Describe the perfect slow dance with {you} in three details.',
+      'Which of your senses does {you} affect the most — and how?',
+      'What is the most romantic-but-risky thing you would try with {you}?',
+      'What is one thing you want {you} to do more often in the evenings?',
+      'What is the most attractive thing a person can do with their hands?'
+    ],
+    dares: [
+      'Look {you} in the eyes and slowly finish this sentence: “If we were alone right now, the first thing I would do is…”',
+      'Pay {you} a compliment so specific it makes them blush. You get three tries.',
+      'Whisper {you}’s name in their ear as if it were a secret.',
+      'Kiss {you} on the cheek — then just next to their lips. Stop there.',
+      'Hold {you}’s hand and trace slow circles on their palm for 30 seconds.',
+      'Seduce {you} using only food words. 30 seconds, no laughing.',
+      'Give {you} your best “come here” look — no words allowed.',
+      'Write a two-line poem about {you}’s lips and read it aloud.',
+      'Slow dance with {you} for 30 seconds — no music, you hum it.',
+      'Fix {you}’s collar or hair as slowly and tenderly as you can.',
+      'Tell {you} three things you find attractive about them — from the most innocent to the least.',
+      'Send {you} a voice note whispering what you want on your next date.',
+      'Kiss {you}’s hand like a gentleman — then like the villain in a romance film.',
+      'Stand behind {you} and whisper a different compliment in each ear.',
+      'Rest your forehead against {you}’s for 20 seconds. First to laugh loses.',
+      'Feed {you} something sweet — slowly, with eye contact.',
+      'Say “I want you” to {you} three ways: shy, bold and dangerous.',
+      'Kiss {you} on the forehead, the nose and the chin — in that order, slowly.',
+      'Give {you} a 30-second neck and shoulder massage.',
+      'Sit as close to {you} as possible until your next turn.',
+      'Recreate the moment you first flirted with {you} — with a much better line.',
+      'Tell {you} something you noticed about them tonight that they think you missed.',
+      'Hug {you} slowly and do not be the first to let go.',
+      'Undo one button or remove one accessory — {you} decides which.',
+      'Do your most seductive walk across the room and back, then sit next to {you}.',
+      'Bite your lip and say {you}’s name as sexily as you can.',
+      'Kiss {you} without using your hands.',
+      'Trace a heart on {you}’s back with one finger — slowly.',
+      'Give {you} a playful 15-second lap dance.',
+      'Kiss {you} on the neck — once, slowly.'
+    ]
+  },
+  spicy: {
+    label: 'Spicy 18+', emoji: '🔥', adult: true,
+    truths: [
+      'What is a fantasy you have never told anyone? Describe only the setting — {you} imagines the rest.',
+      'Where on your body does a kiss make you completely lose focus?',
+      'What have you always wanted to try with {you} but never dared to ask?',
+      'What is the most seductive thing {you} has ever done — maybe without even knowing it?',
+      'Describe your perfect night with {you} in exactly five words.',
+      'In control, or letting {you} take the lead — which is sexier to you, and why?',
+      'What is the most daring place you have ever kissed someone?',
+      'What is your favourite thing {you} wears to bed?',
+      'When were you most tempted by {you} in public — and what stopped you?',
+      'What is your biggest turn-on that has nothing to do with looks?',
+      'What could {you} whisper that would make you leave this game immediately?',
+      'Which of your outfits do you think drives {you} crazy? {you} says if you are right.',
+      'Slow and tender, or bold and spontaneous — what is your mood tonight?',
+      'What seductive message would you send {you} if you knew they would read it at work?',
+      'Which part of your body do you love — and want {you} to notice more?',
+      'Rate {you}’s kissing out of 10 and explain exactly how they can earn the missing points.',
+      'Have you ever planned a seduction? Walk us through it, step by step.',
+      'What is the most attractive sound {you} makes?',
+      'What is the riskiest place you would be tempted to kiss {you}?',
+      'Sight or hearing — which would you take away from {you} to make tonight more interesting?',
+      'What guilty pleasure would you confess only to {you}?',
+      'What is one rule you would love to break with {you} tonight?',
+      'What were you really thinking during your most intense eye contact with {you}?',
+      'When did {you} last make your heart race — and do they know?',
+      'If tonight had a film title, what would it be — and which scene would be rated 18+?',
+      'If {you} blindfolded you for five minutes, what would you hope they did? Keep it teasing.',
+      'Slow, deep, playful or stolen — what is your favourite kind of kiss?',
+      'Which piece of {you}’s clothing would you most like to steal — and why that one?',
+      'Have you ever sent a spicy photo? Would you send one to {you} tonight?',
+      'Neck, ears, back or hands — where are you most sensitive?',
+      'What would you do with {you} on a weekend with no phones and no plans?',
+      'Describe the most seductive kiss you can imagine — without using the word “kiss”.',
+      'What is the boldest thing you have ever whispered to someone?',
+      'What compliment about your body do you secretly want to hear from {you}?',
+      'What is the most seductive scent in the world to you?',
+      'What is the sexiest thing you have ever done that nobody knows about?',
+      'Which part of {you} is your favourite — and how would you kiss it right now?',
+      'What do you find seductive that most people would find strange?',
+      'What is the hottest thing {you} has ever said to you?',
+      'What would you do if {you} walked in wearing only a towel?',
+      'Have you ever been caught kissing? Where?',
+      'Build-up, first touch, or the moment you stop pretending — what is your favourite part of a seduction?',
+      'If you could relive one intimate moment with {you}, which would it be? Describe only the setting.',
+      'What do you want {you} to take the lead on tonight?',
+      'What is the most seductive thing you have ever worn — and who was it for?'
+    ],
+    dares: [
+      'Kiss {you} slowly for 10 seconds. They decide if it counts.',
+      'Whisper in {you}’s ear exactly what you are thinking right now — no editing.',
+      'Kiss {you} somewhere that is not their lips. They say warmer or colder until you find their favourite spot.',
+      'Let {you} blindfold you, then guess where they kiss you. Three guesses.',
+      'Give {you} a slow, sensual neck and shoulder massage for 60 seconds.',
+      'Remove one item of clothing — {you} chooses which (socks and jewellery count).',
+      'Dance slowly and closely with {you} for one full song.',
+      'Hold eye contact with {you} for 30 seconds while slowly moving closer. Whoever looks away first owes a kiss.',
+      'Tell {you} what you plan to do to them later — whispered, in exactly three words.',
+      'Kiss {you}’s neck for five slow seconds.',
+      'Trace a word on {you}’s back with an ice cube. If they guess it, they win a kiss.',
+      'Run your fingers through {you}’s hair and down the back of their neck for 30 seconds.',
+      'Sit facing {you}, as close as possible, without touching, for 30 seconds. First to give in loses.',
+      'Role-play: you are strangers at a hotel bar. Seduce {you} in under a minute.',
+      'Give {you} three kisses: one sweet, one teasing, and one that makes them forget the game.',
+      '{you} picks one thing you must do for them before the night ends. Consent and fun only.',
+      'Record a 10-second seductive voice note for {you} to play tomorrow morning.',
+      'Trace {you}’s lips with your fingertip, then kiss them slowly.',
+      'Do a slow strip-tease of one item — a jacket, a scarf or an over-shirt.',
+      'Describe your plans for {you} later using only emojis. {you} interprets them out loud.',
+      'Kiss {you} along their jaw, from ear to chin.',
+      'Put your hands behind your back and kiss {you}. No hands for the next minute.',
+      'Whisper the most seductive sentence you can invent. {you} rates it out of 10.',
+      'Kiss {you}’s wrist, then the inside of their elbow, then their shoulder.',
+      'Let {you} pick a song and give them a 30-second playful lap dance.',
+      'Lead {you} into a slow dance — then dip them and kiss them.',
+      'Text {you} describing what they are wearing as if it were the sexiest thing you have ever seen.',
+      'Blindfold {you} and touch their arm three ways — lips, fingertips or breath. They guess which.',
+      'Whisper three things you love about {you}’s body — one in each ear, the last against their neck.',
+      'Bite your lip, look at {you}, and say their name like a promise.',
+      'For 60 seconds, talk to {you} only with kisses — hand, cheek or neck.',
+      'Hug {you} slowly from behind and whisper your plan for later.',
+      'Swap one item of clothing with {you} for the rest of the game.',
+      'Whisper a new compliment to {you} every 10 seconds for one minute.',
+      'Kiss {you} like the final scene of a romance film. They say “cut”.',
+      'Kiss {you} for 15 seconds as if nobody in the world were watching.',
+      'Remove two accessories or one item of clothing — your choice.',
+      'Give {you} a slow 30-second foot or calf massage.',
+      'Let {you} draw a heart with lipstick or a pen on your arm or shoulder.',
+      'Whisper to {you} something you would never say in front of other people.',
+      'Sit on {you}’s lap and tell them about your day in your most seductive voice.',
+      'Slowly take off {you}’s shoes and socks, then kiss their ankle.',
+      'Kiss the back of {you}’s neck for five slow seconds.',
+      'Freeze: kiss {you} until they say “freeze” — they can wait as long as they like.',
+      'Give {you} a 20-second sensual dance using only your hips.'
+    ]
+  },
+  afterdark: {
+    label: 'After dark 18+', emoji: '🖤', adult: true,
+    truths: [
+      'Finish honestly: “The moment I knew I wanted {you} was…”',
+      'Say the most seductive thing you can to {you} in exactly five words.',
+      'Rate three of your fantasies mild, medium and too hot to share. Tell us the mild one.',
+      'If {you} could read your mind for 30 seconds tonight, what would surprise them most?',
+      'What is the sexiest thing about the way {you} thinks?',
+      'Write the opening of a seduction scene like a film script: setting, music, first line.',
+      'Words, looks or touch — what do you want more of tonight?',
+      'Which of your secrets would make {you} look at you differently — in a good way?',
+      'What is your most irresistible feature? Be honest, not humble.',
+      'Is there something you have pretended not to want? Confess it, gently.',
+      'What is the most romantic thing you have done that also felt a little dangerous?',
+      'You are leaving {you} a note to read at midnight. What is the first line?',
+      'What would you never do… unless {you} asked very nicely?',
+      'Which words, whispered at the right moment, would melt you completely?',
+      'Which room in the house has the most potential for a romantic surprise — and what would it be?',
+      'What is the boldest thing you would do tonight if you knew {you} would say yes?',
+      'Seduced slowly, or caught by surprise — which do you prefer?',
+      'Where do you love to kiss {you} most — and why there?',
+      'If your desire for {you} were the weather, what is tonight’s forecast?',
+      'What is the most tempting thing {you} could say to you right now? Let them try it.',
+      'What is the most seductive thing {you} could do to you in under ten seconds?',
+      'Describe the outfit you would want {you} to open the door in tonight.',
+      'What is a secret desire you have only ever thought about at 2 a.m.?',
+      'Which of {you}’s looks tells you “tonight is the night”? Show us your version.',
+      'What is the boldest thing you have ever done in the dark?',
+      'If you could give {you} one order tonight that they had to obey, what would it be?',
+      'If {you} gave you one order tonight, what would you hope it is?',
+      'Where is the most unexpected place you have suddenly wanted to kiss {you}?',
+      'Teasing or taking — which are you better at? Prove it with an example.',
+      'Which piece of clothing is the most seductive to take off someone slowly?',
+      'What is the most daring thing you would do with {you} on a holiday where nobody knows you?',
+      'What is the hottest dream you have had about {you}? Describe only how it ended.',
+      'What does {you} do that makes you want to skip dinner and go straight to dessert?',
+      'Candles, music or total darkness — set the scene for tonight.',
+      'What would you whisper to {you} if you knew they could not resist it?',
+      'Rate your self-control around {you} right now, from 1 to 10.',
+      'What “yes” are you dying to hear from {you}?',
+      'Touch, taste, smell, sight or sound — which sense does {you} set on fire?',
+      'What is the longest you have ever kissed someone without stopping?',
+      'What is the most seductive message you have ever received? Paraphrase it.',
+      'Morning, shower, sofa or midnight — when is {you} most irresistible?',
+      'What is one thing you would love {you} to do slower?',
+      'What is one thing you would love {you} to do bolder?',
+      'If tonight had a dress code, what would it be?',
+      'What is the cheekiest place you have ever been caught kissing?',
+      'Which part of {you} do you think about when they are not around?',
+      'What is the most irresistible thing {you} has ever whispered to you?',
+      'Have you ever dressed up just to tempt {you}? Did it work?',
+      'Plan your perfect “do not disturb” evening with {you}, hour by hour.',
+      'What is the most forbidden-feeling thing you have ever wanted to do with {you}? Hint only.'
+    ],
+    dares: [
+      'Forbidden word: choose a word {you} may not say for 3 turns. Every slip costs them a kiss.',
+      'Whisper a compliment, a confession and a promise into {you}’s ear.',
+      'Tension test: hold your lips one centimetre from {you}’s neck for 10 seconds — no touching.',
+      'Lead {you} by the hand to the spot in the room you would choose for a first kiss — and kiss them there.',
+      'Write a time on a piece of paper, hand it to {you} and say “keep this appointment”.',
+      'Close your eyes. {you} kisses you once, anywhere above the shoulders. Describe it in three words.',
+      'Seduce {you} for 30 seconds in a foreign accent of your choice.',
+      'Give {you} a 60-second massage. They choose where: hands, back, neck or feet.',
+      'Ask {you}’s permission with only a look, then slowly remove one of their accessories.',
+      'Dim the lights, pick a song and give {you} one minute of your best moves.',
+      'Hold {you}’s gaze and describe your dream holiday together — make it hot, keep it classy.',
+      '{you} sets a one-minute timer. Keep your fingertips moving slowly on their hand or arm until it ends.',
+      '{you} names a number from 1 to 15. Kiss them for that many seconds.',
+      'Pretend you are seeing {you} for the first time across a crowded room. Walk over and win their number.',
+      'Hide a small object on yourself — pocket, sleeve or collar. {you} has 30 seconds to find it.',
+      'Whisper the plot of a romance novel starring you and {you} — stop just before the best part.',
+      'Give {you} one kiss for each letter of their name, each in a different place (hands, cheeks, neck).',
+      'Let {you} whisper a dare for you to do. You may refuse it once — then the next one is final.',
+      'Slowly trace the outline of {you}’s lips, jaw and neck with one fingertip.',
+      'Make {you} an offer for later tonight that they cannot refuse — and seal it with a kiss.',
+      'Undress {you} with your eyes for 10 seconds while they watch you do it.',
+      'Remove one item of clothing — you choose which, {you} chooses the music.',
+      'Start a kiss on {you}’s hand and end it on their lips — take 20 seconds to get there.',
+      'Whisper in {you}’s ear what you want them to wear — or not wear — next time.',
+      'Lie back. {you} has 30 seconds to make you blush using only kisses on your face and neck.',
+      'Place {you}’s hand wherever you like on your arm, shoulder or neck — it stays there until your next turn.',
+      'Kiss {you} in slow motion, as if the film had slowed down.',
+      'Blindfold {you}. Kiss them in three different places — they must guess the order.',
+      'Give {you} a 60-second back massage — over or under the top, {you} decides.',
+      'Sit on {you}’s lap facing them for 30 seconds. No kissing allowed — first to break loses.',
+      'Run an ice cube slowly along {you}’s neck and collarbone.',
+      'Kiss {you} for 20 seconds without hands — then 20 seconds with.',
+      'Gently hold {you}’s hands above their head and whisper your plans for later — then let go.',
+      'Let {you} take off one item of your clothing, using only one hand.',
+      'Strip-tease of two items — music, eye contact, full commitment.',
+      'Kiss {you}’s collarbone, then their shoulder, then their neck — slower each time.',
+      'Breathe softly along {you}’s neck for 10 seconds without touching.',
+      'Seduce {you} for 60 seconds without touching them at all. They decide if you succeeded.',
+      'Point to where you want to be kissed (clothes stay on). {you} kisses it for 10 seconds.',
+      'For one minute {you} is in charge — you do what they say, within your limits.',
+      'Whisper three things you will do to {you} when the game ends. Keep every promise.',
+      'Give {you} a lap dance to a song of their choice — the whole song.',
+      'Kiss {you} as if you had not seen each other for a year.',
+      'Undo one button of {you}’s shirt or remove one accessory — eyes on theirs the whole time.',
+      'Lean in until your lips are one centimetre from {you}’s and stop. Wait for them to close the gap.',
+      'Melt a piece of chocolate on your lips and kiss {you}.',
+      'Three kisses, three compliments: each kiss somewhere new, each with a whispered compliment.',
+      'Act out the first 30 seconds of your fantasy evening with {you} — stop before it gets too hot.',
+      'Give {you} a slow, full-body hug and hold it for 30 seconds.',
+      'Your choice: remove an item of clothing, or let {you} kiss your neck and shoulders for 20 seconds.'
+    ]
+  },
+  deep: {
+    label: 'Deep talk', emoji: '🌙',
+    truths: [
+      'What are you proud of that you rarely talk about?',
+      'What fear are you quietly working on?',
+      'What would you tell your younger self?',
+      'Which moment changed you the most?',
+      'What does a perfect ordinary day look like for you?',
+      'What do you need more of right now?',
+      'Who has shaped you the most, and how?',
+      'What do you hope people say about you when you are not there?',
+      'Is there a dream you set aside? Would you pick it back up?',
+      'When did you last feel truly at peace?',
+      'What are you most grateful for today?',
+      'What do you value most in a friendship?',
+      'What is something you have forgiven but not forgotten?',
+      'When did you last cry, and why?',
+      'What is a belief you changed your mind about?',
+      'What part of yourself do you hide from most people?',
+      'What is the hardest goodbye you have ever said?',
+      'What would you do if you knew you could not fail?',
+      'What is something you wish people asked you about?',
+      'What does home mean to you?',
+      'What is the kindest thing a stranger has done for you?',
+      'What would you like to be remembered for?',
+      'What are you still learning to accept about yourself?',
+      'What is one thing you would change about how you were raised?'
+    ],
+    dares: [
+      'Tell {you} one thing you admire about them — in detail.',
+      'Share a photo that means a lot to you and tell its story.',
+      'Say one goal out loud, and the first step you will take this week.',
+      'Close your eyes and describe your happiest place for 30 seconds.',
+      'Send a thank-you message to someone you have not thanked enough.',
+      'Give {you} one piece of honest, kind advice.',
+      'Name three things you genuinely like about yourself.',
+      'Sit in silence with {you} for 30 seconds, then share one thought.',
+      'Tell {you} about a time they helped you without knowing it.',
+      'Describe yourself five years from now in five sentences.',
+      'Hum a song that once rescued a bad day, and tell why.',
+      'Write a short note to your future self and read it aloud.',
+      'Tell {you} something you have never said out loud before.',
+      'Share your biggest regret and what it taught you.',
+      'Describe {you} as if you were introducing them to your hero.',
+      'Tell {you} one thing you would like them to understand about you.',
+      'Name one fear and one way you could face it this month.',
+      'Look {you} in the eyes and tell them what they mean to you.',
+      'Share the best decision you ever made, and how it felt.',
+      'Tell {you} about a moment you felt completely alone.',
+      'Ask {you} one question you have always wanted to ask.',
+      'List five small things that made you happy this week.',
+      'Apologise for something — big or small — you never apologised for.'
+    ]
+  },
+  family: {
+    label: 'Family', emoji: '🏡',
+    truths: [
+      'What is your favourite family tradition?',
+      'What is the funniest thing that ever happened at a family meal?',
+      'Which dish would you ask for on your birthday?',
+      'Which chore do you dislike the most?',
+      'If you could have any pet in the world, what would it be?',
+      'What is the best holiday you remember?',
+      'Who is the best cook in the family?',
+      'What is your favourite cartoon of all time?',
+      'What would you do with a whole free day?',
+      'Which superpower would you choose?',
+      'What makes you laugh every single time?',
+      'Who is the messiest person at home? (Be brave.)',
+      'What is the naughtiest thing you did as a kid?',
+      'What is your favourite thing about {you}?',
+      'Which family member are you most like?',
+      'What is the best present you ever got?',
+      'If you were the parent for a day, what rule would you make?',
+      'What is your favourite family photo?',
+      'Which food do you secretly hide from everyone else?',
+      'What is the funniest thing a grandparent ever said?',
+      'What is your favourite game to play together?',
+      'What would you name a new family pet?',
+      'What is the best day out we ever had?',
+      'Who tells the worst jokes in the family?'
+    ],
+    dares: [
+      'Hop on one foot for 15 seconds.',
+      'Make an animal sound — {you} has to guess the animal.',
+      'Talk like a robot until your next turn.',
+      'Make the funniest face you possibly can.',
+      'Tell any joke you know.',
+      'Do 10 squats while counting in another language.',
+      'Pretend to be a waiter and take {you}\u2019s order.',
+      'Draw a cat with your eyes closed.',
+      'Say the alphabet backwards as far as you can.',
+      'Invent a secret handshake with {you} right now.',
+      'Walk like a crab across the room.',
+      'Hum a song and let {you} guess it.',
+      'Spin around five times, then walk in a straight line.',
+      'Do your best grandma or grandpa impression.',
+      'Pretend to be a news reporter announcing dinner.',
+      'Make {you} laugh without saying a word.',
+      'Balance a spoon on your nose for 5 seconds.',
+      'Do the chicken dance.',
+      'Talk like a baby until your next turn.',
+      'Give {you} a piggyback ride (or a very good attempt).',
+      'Say five nice things about the person on your left.',
+      'Build a tower from whatever is on the table.',
+      'Act like a statue in a museum until someone laughs.',
+      'Sing your favourite cartoon theme song.'
+    ]
+  }
+};
+
+const meta = {
+  id: 'truthdare',
+  group: ['couple', 'friends'],
+  title: 'Truth or Dare',
+  emoji: '🎭',
+  tagline: 'Nine decks. One brave question at a time.',
+  blurb: 'Icebreakers, friends, party, couple, flirty, spicy 18+, after dark 18+, deep talk and family decks — over 550 cards. Pick truth or dare; the other player judges.',
+  minutes: '15 min',
+  tags: ['Party', '9 decks', '18+ option'],
+  local: true,
+  alternate: true,
+  levels: [],
+  settings: [
+    {
+      id: 'rounds', label: 'Cards per game', def: 12,
+      options: [{ v: 6, label: '6' }, { v: 12, label: '12' }, { v: 20, label: '20' }, { v: 30, label: '30' }, { v: 50, label: '50' }]
+    },
+    {
+      id: 'only', label: 'Cards in play', def: '',
+      options: [{ v: '', label: 'Truth & dare' }, { v: 'truth', label: 'Truths only' }, { v: 'dare', label: 'Dares only' }]
+    },
+    {
+      id: 'darePts', label: 'A dare is worth', def: 2,
+      options: [{ v: 2, label: '2 points' }, { v: 3, label: '3 points' }]
+    },
+    {
+      id: 'penalty', label: 'Chickening out', def: 0,
+      options: [{ v: 0, label: 'No penalty' }, { v: 1, label: '−1 point' }, { v: 2, label: '−2 points' }]
+    },
+    {
+      id: 'swaps', label: '“Another card”', def: 1,
+      options: [{ v: 1, label: 'Allowed' }, { v: 0, label: 'Not allowed' }]
+    }
+  ],
+  rules: [
+    'Choose your decks — mix as many as you like. Spicy and After dark (18+) are for consenting adult couples — anyone can say no to a card, no questions asked.',
+    'On your turn pick Truth, Dare or let fate decide.',
+    'The other player judges: done, chickened out, or draw another card.',
+    'Turns alternate. Most points wins — but everybody laughs.',
+    'Settings: number of cards, truths or dares only, dare points, chicken penalty.'
+  ]
+};
+
+const pick = (v, allowed, def) => (allowed.includes(v) ? v : def);
+
+function create(opts = {}) {
+  const cats = validCats(DECKS, opts.cats) ? opts.cats.slice() : ['ice', 'friends', 'party'];
+  return {
+    phase: 'choose', turn: 0, cats, card: null, used: [], scores: [0, 0], brave: [0, 0], round: 0, log: [], moves: 0,
+    rounds: pick(opts.rounds, [6, 12, 20, 30, 50], ROUNDS),
+    only: pick(opts.only, ['', 'truth', 'dare'], ''),
+    darePts: pick(opts.darePts, [2, 3], 2),
+    penalty: pick(opts.penalty, [0, 1, 2], 0),
+    swaps: pick(opts.swaps, [0, 1], 1)
+  };
+}
+
+function turn(state) {
+  return state.phase === 'card' ? 1 - state.turn : state.turn;
+}
+
+function deal(state, kind) {
+  const d = draw(DECKS, state.cats, state.used, kind === 'truth' ? 'truths' : 'dares');
+  return { card: { kind, c: d.c, i: d.i, id: state.moves + 1 }, used: d.used };
+}
+
+function apply(state, move) {
+  if (!move || outcome(state).over) return null;
+
+  if (move.cats !== undefined) {
+    if (state.phase !== 'choose' || !validCats(DECKS, move.cats)) return null;
+    return { ...state, cats: move.cats.slice(), moves: state.moves + 1 };
+  }
+
+  if (move.pick) {
+    if (state.phase !== 'choose') return null;
+    const kind = state.only || (move.pick === 'random' ? (Math.random() < 0.5 ? 'truth' : 'dare') : move.pick);
+    if (kind !== 'truth' && kind !== 'dare') return null;
+    if (state.only && move.pick !== 'random' && move.pick !== state.only) return null;
+    const { card, used } = deal(state, kind);
+    card.random = move.pick === 'random' && !state.only;
+    return { ...state, phase: 'card', card, used, moves: state.moves + 1 };
+  }
+
+  if (move.another) {
+    if (state.phase !== 'card' || state.swaps === 0) return null;
+    const { card, used } = deal(state, state.card.kind);
+    return { ...state, card, used, moves: state.moves + 1 };
+  }
+
+  if (move.verdict === 'done' || move.verdict === 'skip') {
+    if (state.phase !== 'card') return null;
+    const p = state.turn;
+    const ok = move.verdict === 'done';
+    const scores = state.scores.slice();
+    const brave = state.brave.slice();
+    if (ok) {
+      scores[p] += pointsOf(state, state.card.kind);
+      if (state.card.kind === 'dare') brave[p] += 1;
+    } else {
+      scores[p] -= state.penalty || 0;
+    }
+    const log = [{ seat: p, kind: state.card.kind, ok }, ...state.log].slice(0, 6);
+    return { ...state, phase: 'choose', turn: 1 - p, card: null, scores, brave, log, round: state.round + 1, moves: state.moves + 1 };
+  }
+
+  return null;
+}
+
+function outcome(state) {
+  if (state.round < roundsOf(state)) return { over: false };
+  const [a, b] = state.scores;
+  if (a === b) return { over: true, draw: true, winner: null };
+  return { over: true, winner: a > b ? 0 : 1, draw: false };
+}
+
+function auto() {
+  return null;
+}
+
+function ai() {
+  return null;
+}
+
+function note(state, seat) {
+  const pts = state.scores[seat];
+  return `${pts} pt${pts === 1 ? '' : 's'} · ${state.brave[seat]} dare${state.brave[seat] === 1 ? '' : 's'}`;
+}
+
+function summary(state, ctx) {
+  const o = outcome(state);
+  if (!o.over || !o.draw) return null;
+  return `All square at ${state.scores[0]} points each — equally brave.`;
+}
+
+/* ------------------------------ view ------------------------------ */
+function names(state, ctx) {
+  const me = ctx.names[state.turn] || `Player ${state.turn + 1}`;
+  const you = ctx.names[1 - state.turn] || `Player ${2 - state.turn}`;
+  return { me, you };
+}
+
+function view(state, ctx) {
+  const { me, you } = names(state, ctx);
+  const over = outcome(state).over;
+  const chooser = state.phase === 'choose' && ctx.myTurn;
+
+  let stage;
+  if (over) {
+    stage = `
+      <div class="tod__final">
+        <span class="tod__trophy" aria-hidden="true">🏆</span>
+        <p>${esc(ctx.names[0])} <b>${state.scores[0]}</b> · <b>${state.scores[1]}</b> ${esc(ctx.names[1])}</p>
+      </div>`;
+  } else if (state.phase === 'choose') {
+    const can = (k) => chooser && (!state.only || state.only === k);
+    stage = `
+      <div class="tod__deck" aria-hidden="true"><i></i><i></i><i></i><span>🎭</span></div>
+      <p class="tod__ask"><b>${esc(me)}</b>, ${state.only === 'truth' ? 'ready for a truth?' : state.only === 'dare' ? 'ready for a dare?' : 'truth or dare?'}</p>
+      <div class="tod__picks">
+        <button class="tod__btn tod__btn--truth" type="button" data-pick="truth" ${can('truth') ? '' : 'disabled'}>
+          <span class="tod__btn-ico" aria-hidden="true">💬</span><b>Truth</b><small>+${pointsOf(state, 'truth')} point</small>
+        </button>
+        <button class="tod__btn tod__btn--spin" type="button" data-pick="random" ${chooser ? '' : 'disabled'} aria-label="Let fate decide">
+          <span aria-hidden="true">🎲</span><small>Fate</small>
+        </button>
+        <button class="tod__btn tod__btn--dare" type="button" data-pick="dare" ${can('dare') ? '' : 'disabled'}>
+          <span class="tod__btn-ico" aria-hidden="true">🔥</span><b>Dare</b><small>+${pointsOf(state, 'dare')} points</small>
+        </button>
+      </div>`;
+  } else {
+    const c = state.card;
+    const deck = DECKS[c.c];
+    const text = deck[c.kind === 'truth' ? 'truths' : 'dares'][c.i] || '';
+    const judge = ctx.myTurn;
+    stage = `
+      <div class="tod__card tod__card--${c.kind}" data-card="${c.id}">
+        <div class="tod__inner">
+          <div class="tod__face tod__face--back"><span>${c.kind === 'truth' ? '💬' : '🔥'}</span></div>
+          <div class="tod__face tod__face--front">
+            <span class="tod__kind">${c.kind === 'truth' ? 'Truth' : 'Dare'}${c.random ? ' · by fate' : ''}</span>
+            <p class="tod__text">${fill(text, { me, you })}</p>
+            <span class="tod__deckname">${deck.emoji} ${esc(deck.label)} · for ${esc(me)}</span>
+          </div>
+        </div>
+      </div>
+      ${
+        judge
+          ? `<p class="tod__ask">${ctx.local ? `<b>${esc(you)}</b>, you judge.` : 'You judge.'} Did ${esc(me)} do it?</p>
+             <div class="tod__verdict">
+               <button class="btn btn--primary" type="button" data-verdict="done">✓ Done · +${pointsOf(state, c.kind)}</button>
+               <button class="btn btn--ghost" type="button" data-verdict="skip">🐔 Chickened out${state.penalty ? ` · −${state.penalty}` : ''}</button>
+               ${state.swaps === 0 ? '' : '<button class="btn btn--ghost btn--sm" type="button" data-another>↻ Another card</button>'}
+             </div>`
+          : `<p class="tod__ask">Your turn to shine — <b>${esc(you)}</b> is the judge.</p>`
+      }`;
+  }
+
+  return `
+    <div class="tod tod--${state.phase}">
+      ${catChips(DECKS, state.cats, chooser)}
+      ${beads(state.round, roundsOf(state), over ? -1 : state.round)}
+      <div class="tod__stage">${stage}</div>
+      ${
+        state.log.length
+          ? `<ol class="tod__log">${state.log
+              .map((l) => `<li class="${l.ok ? 'is-ok' : 'is-skip'}"><b>${esc(ctx.names[l.seat] || '')}</b> ${l.ok ? (l.kind === 'dare' ? 'nailed a dare 🔥' : 'told the truth 💬') : `skipped a ${l.kind} 🐔`}</li>`)
+              .join('')}</ol>`
+          : ''
+      }
+    </div>`;
+}
+
+let lastCelebrated = '';
+
+function bind(root, state, ctx, play) {
+  bindCats(root, state.cats, play);
+  root.querySelectorAll('[data-pick]').forEach((b) => b.addEventListener('click', () => play({ pick: b.dataset.pick })));
+  root.querySelectorAll('[data-verdict]').forEach((b) =>
+    b.addEventListener('click', () => {
+      if (b.dataset.verdict === 'done') {
+        const key = `${ctx.sessionKey}:${state.moves}`;
+        if (key !== lastCelebrated) {
+          lastCelebrated = key;
+          burst(root.querySelector('.tod__stage'), state.card.kind === 'dare' ? ['🔥', '⭐', '✨'] : ['💬', '💜', '✨']);
+        }
+        setTimeout(() => { if (root.isConnected) play({ verdict: 'done' }); }, 380);
+      } else {
+        play({ verdict: 'skip' });
+      }
+    })
+  );
+  root.querySelector('[data-another]')?.addEventListener('click', () => play({ another: true }));
+}
+
+function coach(state, ctx) {
+  if (outcome(state).over) return 'Shuffle the decks and go again — or switch to a new mix.';
+  const { me, you } = names(state, ctx);
+  if (state.phase === 'choose') {
+    return ctx.myTurn ? 'Truth is safe, dare pays more. Tap the chips above to mix decks.' : `${me} is choosing…`;
+  }
+  return ctx.myTurn ? 'Be fair — and be generous with the brave ones.' : `${you} is judging.`;
+}
+return Object.freeze({ DECKS, meta, create, turn, apply, outcome, auto, ai, note, summary, view, bind, coach });
+  })();
+
+  /* ===== js/arcade/games/pairs.js ===== */
+  const __m29 = (function () {
+const { esc, draw, catChips, bindCats, validCats, beads, burst } = __m27;
+/**
+ * LifeFlow Arcade — the shared engine behind the two-pick social games.
+ * Each round one question, two hidden answers, then a reveal.
+ *   mode 'match' — both answer for themselves; every match counts for the pair.
+ *   mode 'guess' — one answers about themselves, the other guesses it.
+ * state.turn is the player who answers first this round.
+ */
+
+
+function makePairGame(cfg) {
+  const { bank, mode } = cfg;
+  const ready = new Set();
+  const cheered = new Set();
+  const roundsOf = (state) => state.rounds || cfg.rounds;
+
+  const item = (state) => bank[state.q.c].items[state.q.i];
+  const options = (state) => cfg.options(item(state));
+
+  function nextQ(state, cats) {
+    const d = draw(bank, cats, state.used);
+    return { q: { c: d.c, i: d.i }, used: d.used };
+  }
+
+  function create(opts = {}) {
+    const cats = validCats(bank, opts.cats) ? opts.cats.slice() : cfg.cats.slice();
+    const rounds = Number.isInteger(opts.rounds) && opts.rounds >= 3 && opts.rounds <= 50 ? opts.rounds : cfg.rounds;
+    const base = { gid: Math.random().toString(36).slice(2, 9), round: 0, rounds, turn: 0, picks: [-1, -1], phase: 'pick', used: [], scores: [0, 0], hits: 0, cats, log: [], moves: 0 };
+    return { ...base, ...nextQ(base, base.cats) };
+  }
+
+  function turn(state) {
+    if (state.phase === 'reveal') return 1 - state.turn;
+    return state.picks[state.turn] < 0 ? state.turn : 1 - state.turn;
+  }
+
+  const untouched = (state) => state.phase === 'pick' && state.picks[0] < 0 && state.picks[1] < 0;
+
+  function apply(state, move) {
+    if (!move || outcome(state).over) return null;
+
+    if (move.cats !== undefined) {
+      if (!untouched(state) || !validCats(bank, move.cats)) return null;
+      return { ...state, cats: move.cats.slice(), ...nextQ(state, move.cats), moves: state.moves + 1 };
+    }
+
+    if (move.skipq) {
+      if (!untouched(state)) return null;
+      return { ...state, ...nextQ(state, state.cats), moves: state.moves + 1 };
+    }
+
+    if (move.pick !== undefined) {
+      const k = move.pick;
+      if (state.phase !== 'pick' || !Number.isInteger(k) || k < 0 || k >= options(state).length) return null;
+      const seat = turn(state);
+      const picks = state.picks.slice();
+      picks[seat] = k;
+      const next = { ...state, picks, moves: state.moves + 1 };
+      if (picks[0] < 0 || picks[1] < 0) return next;
+
+      const hit = picks[0] === picks[1];
+      next.phase = 'reveal';
+      if (mode === 'match') next.hits = state.hits + (hit ? 1 : 0);
+      else if (hit) {
+        next.scores = state.scores.slice();
+        next.scores[1 - state.turn] += 1;
+      }
+      next.log = [{ q: state.q.c + ':' + state.q.i, first: state.turn, a: picks[state.turn], b: picks[1 - state.turn], hit }, ...state.log].slice(0, 5);
+      return next;
+    }
+
+    if (move.next) {
+      if (state.phase !== 'reveal') return null;
+      const round = state.round + 1;
+      const base = { ...state, round, turn: 1 - state.turn, picks: [-1, -1], phase: 'pick', moves: state.moves + 1 };
+      return round < roundsOf(state) ? { ...base, ...nextQ(state, state.cats) } : base;
+    }
+
+    return null;
+  }
+
+  function outcome(state) {
+    const rounds = roundsOf(state);
+    if (state.round < rounds) return { over: false };
+    if (mode === 'match') {
+      return { over: true, winner: null, draw: true, coop: true, celebrate: state.hits >= Math.ceil(rounds * 0.6) };
+    }
+    const [a, b] = state.scores;
+    if (a === b) return { over: true, winner: null, draw: true };
+    return { over: true, winner: a > b ? 0 : 1, draw: false };
+  }
+
+  function note(state, seat) {
+    if (mode === 'match') return `💞 ${state.hits} in sync`;
+    return `${state.scores[seat]} guessed right`;
+  }
+
+  function summary(state) {
+    const o = outcome(state);
+    if (!o.over) return null;
+    if (mode === 'match') return `${state.hits} of ${roundsOf(state)} in sync — ${cfg.verdict(state.hits, roundsOf(state))}`;
+    return o.draw ? `${state.scores[0]} each — you know each other equally well.` : null;
+  }
+
+  /* ---------------------------- view ---------------------------- */
+  function roles(state, ctx) {
+    const first = state.turn;
+    const n = (s) => ctx.names[s] || `Player ${s + 1}`;
+    return { first, second: 1 - first, nFirst: n(first), nSecond: n(1 - first), n };
+  }
+
+  function view(state, ctx) {
+    const over = outcome(state).over;
+    const rounds = roundsOf(state);
+    const r = roles(state, ctx);
+    const key = `${state.gid}:${state.round}`;
+    let stage;
+
+    if (over) {
+      stage = `
+        <div class="pair__final">
+          <span class="pair__final-ico" aria-hidden="true">${mode === 'match' ? '💞' : '🏆'}</span>
+          <p class="pair__final-big">${mode === 'match' ? `${state.hits}<small>/${rounds}</small>` : `${state.scores[0]} · ${state.scores[1]}`}</p>
+          <p class="t-dim">${esc(summary(state) || '')}</p>
+        </div>`;
+    } else if (state.phase === 'pick' && ctx.local && state.picks[r.first] >= 0 && !ready.has(key)) {
+      stage = `
+        <div class="pair__handoff">
+          <span class="pair__lock" aria-hidden="true">🔒</span>
+          <p><b>${esc(r.nFirst)}</b> has answered.</p>
+          <p class="t-dim">Pass the phone to <b>${esc(r.nSecond)}</b> — no peeking!</p>
+          <button class="btn btn--primary" type="button" data-ready>I'm ${esc(r.nSecond)} — show me</button>
+        </div>`;
+    } else {
+      const picker = turn(state);
+      const viewer = ctx.seat;
+      const role = state.phase === 'reveal' ? 'reveal' : mode === 'guess' && picker !== r.first ? 'guesser' : 'self';
+      const ask = cfg.ask(item(state), { role, subject: r.nFirst, mode });
+      const opts = options(state);
+      const mine = state.picks[viewer];
+      const canPick = state.phase === 'pick' && ctx.myTurn && state.picks[ctx.local ? picker : viewer] < 0;
+
+      let body;
+      if (state.phase === 'reveal') {
+        const hit = state.picks[0] === state.picks[1];
+        const a = state.picks[r.first];
+        const b = state.picks[r.second];
+        const lab = mode === 'guess' ? ['answered', 'guessed'] : ['picked', 'picked'];
+        body = `
+          <div class="pair__reveal ${hit ? 'is-hit' : 'is-miss'}">
+            <div class="pair__ans pair__ans--a"><span class="pair__who">${esc(r.nFirst)} ${lab[0]}</span><b>${esc(opts[a])}</b></div>
+            <span class="pair__badge" aria-hidden="true">${hit ? (mode === 'match' ? '💞' : '🎯') : (mode === 'match' ? '✨' : '🙈')}</span>
+            <div class="pair__ans pair__ans--b"><span class="pair__who">${esc(r.nSecond)} ${lab[1]}</span><b>${esc(opts[b])}</b></div>
+          </div>
+          <p class="pair__verdict">${hit ? cfg.hitLine(r) : cfg.missLine(r)}</p>
+          ${
+            ctx.myTurn
+              ? `<button class="btn btn--primary pair__next" type="button" data-next>${state.round + 1 >= rounds ? 'See the result' : 'Next question'} →</button>`
+              : `<p class="t-dim fs-sm">${esc(r.nSecond)} moves you on…</p>`
+          }`;
+      } else {
+        body = `
+          <div class="pair__opts pair__opts--n${opts.length}">
+            ${opts
+              .map(
+                (o, k) => `${k === 1 && opts.length === 2 ? '<span class="pair__or" aria-hidden="true">or</span>' : ''}
+                  <button class="pair__opt${mine === k && !ctx.local ? ' is-mine' : ''}" type="button" data-opt="${k}" style="--k:${k}" ${canPick ? '' : 'disabled'}>
+                    <span class="pair__opt-k" aria-hidden="true">${'ABCD'[k]}</span><span>${esc(o)}</span>
+                  </button>`
+              )
+              .join('')}
+          </div>
+          <p class="pair__who-picks">${
+            canPick
+              ? ctx.local
+                ? `<b>${esc(r.n(picker))}</b>, ${role === 'guesser' ? `guess what ${esc(r.nFirst)} said` : 'your answer'}`
+                : role === 'guesser' ? `Guess what ${esc(r.nFirst)} said` : 'Your answer'
+              : !ctx.local && mine >= 0
+              ? `🔒 Locked in. Waiting for ${esc(r.n(1 - viewer))}…`
+              : `${esc(r.n(picker))} is choosing…`
+          }</p>
+          ${untouched(state) && ctx.myTurn ? `<button class="btn btn--ghost btn--sm" type="button" data-skipq>↻ Another question</button>` : ''}`;
+      }
+
+      stage = `
+        <div class="pair__q" data-q="${state.q.c}:${state.q.i}">
+          <span class="pair__eyebrow">${bank[state.q.c].emoji} ${esc(ask.eyebrow)}</span>
+          ${ask.text ? `<h3 class="pair__text">${esc(ask.text)}</h3>` : ''}
+        </div>
+        ${body}`;
+    }
+
+    return `
+      <div class="pair pair--${mode} pair--${state.phase}">
+        ${catChips(bank, state.cats, !over && untouched(state) && ctx.myTurn)}
+        ${beads(state.round, rounds, over ? -1 : state.round)}
+        <div class="pair__stage">${stage}</div>
+      </div>`;
+  }
+
+  function bind(root, state, ctx, play) {
+    bindCats(root, state.cats, play);
+    root.querySelectorAll('[data-opt]').forEach((b) => b.addEventListener('click', () => play({ pick: Number(b.dataset.opt) })));
+    root.querySelector('[data-skipq]')?.addEventListener('click', () => play({ skipq: true }));
+    root.querySelector('[data-next]')?.addEventListener('click', () => play({ next: true }));
+    root.querySelector('[data-ready]')?.addEventListener('click', () => {
+      ready.add(`${state.gid}:${state.round}`);
+      ctx.refresh();
+    });
+
+    if (state.phase === 'reveal' && state.picks[0] === state.picks[1]) {
+      const key = `${state.gid}:${state.round}`;
+      if (!cheered.has(key)) {
+        cheered.add(key);
+        setTimeout(() => burst(root.querySelector('.pair__reveal'), mode === 'match' ? ['💞', '💗', '✨'] : ['🎯', '⭐', '✨']), 380);
+      }
+    }
+  }
+
+  function coach(state, ctx) {
+    if (outcome(state).over) return mode === 'match' ? 'Play again — new questions every time.' : 'Swap roles and see who really pays attention.';
+    const r = roles(state, ctx);
+    if (state.phase === 'reveal') return state.picks[0] === state.picks[1] ? 'Same wavelength.' : 'Talk about it — that is half the fun.';
+    if (mode === 'guess') return turn(state) === r.first ? `${r.nFirst} answers about themselves first.` : `Think like ${r.nFirst}.`;
+    return 'Answer honestly. The other choice stays hidden until both are in.';
+  }
+
+  return { create, turn, apply, outcome, note, summary, view, bind, coach };
+}
+return Object.freeze({ makePairGame });
+  })();
+
+  /* ===== js/arcade/games/insync.js ===== */
+  const __m28 = (function () {
+const { makePairGame } = __m29;
+/**
+ * LifeFlow Arcade — In Sync.
+ * "Would you rather…" for two. Both answer in secret, then reveal — how often do you match?
+ * Co-operative: you play together against the questions.
+ */
+
+
+const BANK = {
+  couple: {
+    label: 'Us two', emoji: '💞',
+    items: [
+      ['A cosy night in', 'A night out in town'],
+      ['Breakfast in bed', 'Dinner under the stars'],
+      ['A beach holiday', 'A mountain cabin'],
+      ['Handwritten love notes', 'Surprise gifts'],
+      ['Dance in the kitchen', 'Sing together in the car'],
+      ['Plan every detail of a trip', 'Book a flight and improvise'],
+      ['A film marathon', 'A board-game night'],
+      ['Cook together', 'Order our favourite takeaway'],
+      ['Matching pyjamas', 'Matching mugs'],
+      ['Hear "I love you" every day', 'Feel it without words'],
+      ['A sunrise walk', 'A sunset picnic'],
+      ['A cosy flat in the city', 'A big house in the countryside'],
+      ['Relive our first date', 'Fast-forward to our dream trip'],
+      ['Cuddle on the sofa', 'Cuddle under the stars'],
+      ['Matching tattoos', 'Matching rings'],
+      ['Long voice notes', 'Long phone calls'],
+      ['A surprise party', 'A surprise trip'],
+      ['Say sorry first', 'Get the first hug'],
+      ['Read each other\u2019s minds', 'Read each other\u2019s messages'],
+      ['Our song on repeat', 'A new song every week'],
+      ['Pyjamas all Sunday', 'Brunch out every Sunday'],
+      ['A small wedding', 'A huge party'],
+      ['Grow old in our hometown', 'Grow old somewhere new'],
+      ['A love letter every year', 'A photo album every year'],
+      ['Share one dessert', 'Each get our own'],
+      ['Be the big spoon', 'Be the little spoon'],
+      ['Plan date night', 'Be surprised by date night']
+    ]
+  },
+  romance: {
+    label: 'Romance', emoji: '🌹',
+    items: [
+      ['Candlelit dinner at home', 'Rooftop dinner in town'],
+      ['A slow dance', 'Stargazing on a blanket'],
+      ['Love notes in a pocket', 'Love notes on the mirror'],
+      ['A kiss in the rain', 'A kiss at sunset'],
+      ['Hold hands everywhere', 'Steal glances across the room'],
+      ['Remember every date', 'Recreate every date'],
+      ['A weekend away, phones off', 'A week at home, just us'],
+      ['Write our love story', 'Film our love story'],
+      ['Morning cuddles', 'Late-night talks'],
+      ['Flowers for no reason', 'Breakfast in bed for no reason'],
+      ['A forehead kiss', 'A long hug from behind'],
+      ['Fall in love again every year', 'Stay in love exactly like now'],
+      ['A serenade', 'A love poem'],
+      ['A picnic by the sea', 'A cabin by the fire']
+    ]
+  },
+  spicy: {
+    label: 'Spicy 18+', emoji: '🔥',
+    items: [
+      ['Kiss slowly', 'Kiss like it is the last time'],
+      ['Lights on', 'Candles only'],
+      ['Make the first move', 'Be seduced'],
+      ['A steamy slow dance', 'A pillow fight that gets out of hand'],
+      ['Whisper something naughty', 'Text something naughty'],
+      ['A surprise outfit', 'A surprise massage'],
+      ['Lingering eye contact across a room', 'A secret touch under the table'],
+      ['Kisses on the neck', 'Kisses everywhere but the lips'],
+      ['Be teased all evening', 'Do all the teasing'],
+      ['A hotel night for no reason', 'Turn the bedroom into a hotel suite'],
+      ['Flirt shamelessly in public', 'Save it all for later'],
+      ['A long massage with warm oil', 'A long bath together'],
+      ['A blindfolded kiss', 'Be the one holding the blindfold'],
+      ['Morning romance', 'Midnight romance'],
+      ['Dress up for each other', 'Dress down for each other'],
+      ['A naughty dare game', 'A slow, sultry evening'],
+      ['Be in charge tonight', 'Let them be in charge tonight'],
+      ['A spicy photo just for them', 'A spicy voice note just for them'],
+      ['Wake them up with kisses', 'Keep them up with kisses'],
+      ['Role-play strangers at a bar', 'Role-play a first date all over again']
+    ]
+  },
+  life: {
+    label: 'Life together', emoji: '🏡',
+    items: [
+      ['Wake up early together', 'Sleep in together'],
+      ['One shared account', 'Separate accounts'],
+      ['A dog', 'A cat'],
+      ['Cook every night', 'Meal-prep on Sundays'],
+      ['Big family gatherings', 'Quiet holidays for two'],
+      ['Save for a house', 'Save for travel'],
+      ['Tidy as you go', 'A big clean once a week'],
+      ['City life', 'Village life'],
+      ['Plan the budget', 'Plan the fun'],
+      ['Minimal decor', 'Cosy, full-of-things decor'],
+      ['Celebrate every small win', 'Save it for the big moments'],
+      ['A series in bed', 'Talks in bed'],
+      ['Same side of the bed forever', 'Swap sides whenever'],
+      ['Kids early', 'Kids later (or never)']
+    ]
+  },
+  friends: {
+    label: 'Friends', emoji: '🤝',
+    items: [
+      ['A road trip', 'A weekend in a big city'],
+      ['Karaoke night', 'An escape room'],
+      ['A group chat that never sleeps', 'Calls only when it matters'],
+      ['Host the party', 'Be the guest'],
+      ['Camping under the stars', 'A five-star hotel'],
+      ['Pizza night', 'A barbecue'],
+      ['Plan the trip', 'Just show up'],
+      ['Always 10 minutes early', 'Always 10 minutes late'],
+      ['Be the funny friend', 'Be the wise friend'],
+      ['A big birthday party', 'A tiny dinner with close friends'],
+      ['Win a quiz night', 'Win a dance-off'],
+      ['A spontaneous trip tonight', 'A perfectly planned trip next month'],
+      ['Always pick the restaurant', 'Never have to pick'],
+      ['Lose your phone for a week', 'Lose your voice for a week'],
+      ['A brutally honest friend', 'An always-supportive friend'],
+      ['Game night', 'Movie night'],
+      ['Live with your best friend', 'Live next door to them'],
+      ['Be the DJ', 'Be the photographer'],
+      ['Laugh until you cry', 'Talk until sunrise'],
+      ['A theme park', 'A water park'],
+      ['Share every secret', 'Keep a little mystery']
+    ]
+  },
+  fun: {
+    label: 'Silly', emoji: '😂',
+    items: [
+      ['Fly', 'Be invisible'],
+      ['Talk to animals', 'Speak every human language'],
+      ['Give up social media', 'Give up films and series'],
+      ['Have a rewind button', 'Have a pause button'],
+      ['Sing instead of speaking', 'Dance whenever you walk'],
+      ['Be a famous singer', 'Be a famous chef'],
+      ['Fight one horse-sized duck', 'Fight a hundred duck-sized horses'],
+      ['Live in a treehouse', 'Live on a houseboat'],
+      ['Teleport anywhere', 'Read minds'],
+      ['Unlimited pizza for life', 'Unlimited ice cream for life'],
+      ['Always have to whisper', 'Always have to shout'],
+      ['Have a pet dragon', 'Have a pet unicorn'],
+      ['Only eat with chopsticks', 'Only eat with a spoon'],
+      ['Be a famous YouTuber', 'Be a secret millionaire'],
+      ['Have a personal chef', 'Have a personal driver'],
+      ['Be stuck in a lift with your boss', 'Be stuck in a lift with your ex'],
+      ['Live without music', 'Live without films'],
+      ['Subtitles for people\u2019s thoughts', 'A rewind button for conversations'],
+      ['Be the funniest in the room', 'Be the smartest in the room'],
+      ['Snore like a tractor', 'Talk in your sleep'],
+      ['Wear pyjamas everywhere', 'Wear a suit everywhere'],
+      ['Sneeze glitter', 'Hiccup bubbles'],
+      ['Live in the past', 'Live in the future']
+    ]
+  },
+  deep: {
+    label: 'Deep', emoji: '🌙',
+    items: [
+      ['Know every big change before it happens', 'Be surprised by all of them'],
+      ['Relive your best day', 'Erase your worst day'],
+      ['Be liked by many', 'Be deeply loved by a few'],
+      ['Have more time', 'Have more money'],
+      ['Follow your heart', 'Follow your head'],
+      ['Know a painful truth', 'Keep a kind illusion'],
+      ['A quiet, peaceful life', 'An exciting, unpredictable life'],
+      ['Change one thing in the past', 'See one thing in the future'],
+      ['Be remembered for ever', 'Be happy and forgotten'],
+      ['Live by the sea', 'Live in the mountains'],
+      ['Always say what you think', 'Never say anything you regret'],
+      ['Be brave', 'Be wise'],
+      ['Forgive easily', 'Never forget'],
+      ['A big love that ends', 'A calm love that lasts'],
+      ['Know all the answers', 'Ask all the right questions'],
+      ['Be fearless', 'Be at peace'],
+      ['A life of comfort', 'A life of meaning'],
+      ['Start over somewhere new', 'Grow where you are planted'],
+      ['Be understood', 'Be admired'],
+      ['Give advice', 'Receive advice']
+    ]
+  },
+  travel: {
+    label: 'Travel', emoji: '✈️',
+    items: [
+      ['Tokyo', 'New York'],
+      ['A safari in Africa', 'Northern lights in Norway'],
+      ['Backpacking', 'A luxury resort'],
+      ['A train across Europe', 'A road trip across America'],
+      ['A night in the desert', 'A tropical island'],
+      ['Window seat', 'Aisle seat'],
+      ['Museums and history', 'Street food and markets'],
+      ['Travel solo', 'Travel with a group'],
+      ['The riads of Marrakech', 'The bazaars of Istanbul'],
+      ['A ski holiday', 'A beach holiday'],
+      ['A cruise', 'A road trip'],
+      ['Paris', 'Rome'],
+      ['Bali', 'Santorini'],
+      ['A hidden village', 'A famous landmark'],
+      ['A treehouse hotel', 'An ice hotel'],
+      ['A hot-air balloon ride', 'Diving with turtles'],
+      ['Pack light', 'Pack for every possibility'],
+      ['The blue streets of Chefchaouen', 'The rose city of Petra'],
+      ['Andalusia', 'Cappadocia'],
+      ['A long weekend every month', 'One huge trip a year']
+    ]
+  },
+  food: {
+    label: 'Food', emoji: '🍕',
+    items: [
+      ['Sweet', 'Salty'],
+      ['Pizza', 'Burger'],
+      ['Tea', 'Coffee'],
+      ['Couscous Friday', 'Pasta night'],
+      ['Chocolate', 'Fresh fruit'],
+      ['Spicy', 'Mild'],
+      ['A big breakfast', 'A big dinner'],
+      ['Home cooking', 'A restaurant'],
+      ['Pancakes', 'Waffles'],
+      ['Sushi', 'Tajine'],
+      ['Ice cream', 'Cake'],
+      ['Cook it', 'Just eat it'],
+      ['Crêpes', 'Msemen'],
+      ['Street food', 'Fine dining'],
+      ['Breakfast for dinner', 'Dinner for breakfast'],
+      ['Chocolate cake', 'Cheesecake'],
+      ['Crispy fries', 'Creamy mash'],
+      ['Cook for a crowd', 'Cook for two'],
+      ['Harissa on everything', 'No sauce at all'],
+      ['Feed each other', 'Fight over the last bite']
+    ]
+  }
+};
+
+const VERDICTS = [
+  [9, 'practically one mind 💞'],
+  [7, 'beautifully in tune'],
+  [5, 'pretty close'],
+  [3, 'opposites attract'],
+  [0, 'full of surprises']
+];
+
+const G = makePairGame({
+  bank: BANK,
+  mode: 'match',
+  rounds: 10,
+  cats: ['couple', 'fun', 'food'],
+  options: (it) => it,
+  ask: () => ({ eyebrow: 'Would you rather…', text: '' }),
+  hitLine: () => 'In sync! 💞',
+  missLine: () => 'Different picks — tell each other why.',
+  verdict: (hits, total) => (VERDICTS.find(([n]) => hits >= Math.round((n * total) / 10)) || VERDICTS[VERDICTS.length - 1])[1]
+});
+
+const meta = {
+  id: 'insync',
+  group: ['couple', 'friends'],
+  title: 'In Sync',
+  emoji: '💞',
+  tagline: 'Would you rather… and do you match?',
+  blurb: 'Two answers, chosen in secret, revealed together. Nine decks from cosy to silly to spicy — find out how in tune you really are.',
+  minutes: '8 min',
+  tags: ['Couples', 'Co-op', '9 decks'],
+  local: true,
+  alternate: true,
+  levels: [],
+  settings: [
+    {
+      id: 'rounds', label: 'Questions per game', def: 10,
+      options: [{ v: 5, label: '5' }, { v: 10, label: '10' }, { v: 15, label: '15' }, { v: 20, label: '20' }, { v: 30, label: '30' }]
+    }
+  ],
+  rules: [
+    'Each round brings a "would you rather" with two choices.',
+    'You both answer in secret — on one phone, hand it over when asked.',
+    'Then the reveal: every match is a point for the two of you.',
+    'Mix the decks with the chips at the top. Spicy 18+ is for grown-up couples.',
+    'Change the number of questions in Settings.'
+  ]
+};
+
+function create(opts) { return G.create(opts); }
+function turn(state) { return G.turn(state); }
+function apply(state, move) { return G.apply(state, move); }
+function outcome(state) { return G.outcome(state); }
+function auto() { return null; }
+function ai() { return null; }
+function note(state, seat) { return G.note(state, seat); }
+function summary(state) { return G.summary(state); }
+function view(state, ctx) { return G.view(state, ctx); }
+function bind(root, state, ctx, play) { return G.bind(root, state, ctx, play); }
+function coach(state, ctx) { return G.coach(state, ctx); }
+return Object.freeze({ meta, create, turn, apply, outcome, auto, ai, note, summary, view, bind, coach });
+  })();
+
+  /* ===== js/arcade/games/knowme.js ===== */
+  const __m30 = (function () {
+const { makePairGame } = __m29;
+/**
+ * LifeFlow Arcade — Know Me?
+ * One answers a question about themselves in secret; the other guesses it.
+ * Roles swap every round. Whoever reads the other best wins.
+ */
+
+
+const BANK = {
+  me: {
+    label: 'Everyday me', emoji: '🙂',
+    items: [
+      ['Perfect weekend?', ['Lazy at home', 'Out in nature', 'With friends', 'Exploring a city']],
+      ['Favourite season?', ['Spring', 'Summer', 'Autumn', 'Winter']],
+      ['Morning or night?', ['Early bird', 'Night owl', 'Depends on the day', 'Always tired']],
+      ['Biggest pet peeve?', ['Lateness', 'Loud chewing', 'Messy spaces', 'Slow walkers']],
+      ['Dream pet?', ['A dog', 'A cat', 'A bird', 'No pets, thanks']],
+      ['Superpower of choice?', ['Flying', 'Invisibility', 'Teleportation', 'Reading minds']],
+      ['When stressed, I…', ['Sleep it off', 'Eat something nice', 'Talk it out', 'Go for a walk']],
+      ['Best way to relax?', ['Music', 'A film or series', 'A long bath', 'Sport']],
+      ['Phone battery usually at…', ['Above 80%', 'Around half', 'Living on 5%', 'Always charging']],
+      ['Messy or tidy?', ['Spotless', 'Organised chaos', 'Tidy on the outside', 'Do not open that drawer']],
+      ['First thing I do in the morning?', ['Check my phone', 'Coffee or tea', 'Snooze again', 'Shower']],
+      ['How I spend a rainy day?', ['Under a blanket', 'Cleaning the house', 'Out anyway', 'Cooking something big']],
+      ['My shopping style?', ['Plan and list', 'Impulse buys', 'Online only', 'Avoid it']],
+      ['What drains my energy fastest?', ['Crowds', 'Boredom', 'Arguments', 'Bad sleep']],
+      ['Favourite time of day?', ['Sunrise', 'Lunchtime', 'Golden hour', 'Midnight']],
+      ['In a group I am usually…', ['The organiser', 'The joker', 'The listener', 'The one on the phone']],
+      ['My guilty pleasure?', ['Reality TV', 'Junk food', 'Online shopping', 'Napping']],
+      ['How I handle a bad day?', ['Music loud', 'Talk to someone', 'Stay quiet', 'Treat myself']]
+    ]
+  },
+  food: {
+    label: 'Food & taste', emoji: '🍜',
+    items: [
+      ['Comfort food?', ['Pizza', 'Couscous', 'Chocolate', 'Pasta']],
+      ['Go-to drink?', ['Coffee', 'Mint tea', 'Juice', 'Water']],
+      ['Snack mood?', ['Sweet', 'Salty', 'Both at once', 'Fruit, honestly']],
+      ['Favourite cuisine?', ['Moroccan', 'Italian', 'Asian', 'Mexican']],
+      ['Eggs, how?', ['Scrambled', 'Fried', 'Omelette', 'Boiled']],
+      ['Dessert of choice?', ['Ice cream', 'Cake', 'Fruit salad', 'Pastries']],
+      ['At a restaurant, what matters most?', ['The food', 'The view', 'The company', 'The price']],
+      ['Spice level?', ['None, please', 'A little kick', 'Hot', 'Set my mouth on fire']],
+      ['Breakfast of choice?', ['Msemen and honey', 'Eggs', 'Cereal', 'Just coffee']],
+      ['Pizza topping?', ['Margherita', 'Tuna', 'Pepperoni', 'Everything']],
+      ['Food I could eat every day?', ['Bread', 'Rice', 'Pasta', 'Chicken']],
+      ['In the kitchen I am…', ['The chef', 'The helper', 'The taster', 'Banned']],
+      ['Late-night craving?', ['Chocolate', 'Chips', 'Leftovers', 'Ice cream']],
+      ['Fast-food order?', ['Burger', 'Tacos', 'Fried chicken', 'Never']]
+    ]
+  },
+  love: {
+    label: 'Love & us', emoji: '💞',
+    items: [
+      ['Love language?', ['Kind words', 'Quality time', 'Gifts', 'Acts of service']],
+      ['Ideal date?', ['A fancy dinner', 'A picnic', 'The cinema', 'A long walk']],
+      ['Most romantic gesture?', ['A handwritten letter', 'A surprise trip', 'Flowers', 'Cooking dinner']],
+      ['How I show I care?', ['Little gifts', 'Helping out', 'Sweet words', 'Making time']],
+      ['Perfect evening together?', ['Cooking together', 'Film night', 'Going out', 'Talking for hours']],
+      ['After an argument I…', ['Need some space', 'Want to talk it out now', 'Make a joke', 'Apologise first']],
+      ['Favourite kind of photo of us?', ['Silly selfies', 'Travel shots', 'Candid moments', 'We never take any']],
+      ['Anniversary plan?', ['A trip away', 'A special dinner', 'A cosy day at home', 'A surprise']],
+      ['What made me fall for you?', ['Your smile', 'Your humour', 'Your kindness', 'Your eyes']],
+      ['Best compliment you can give me?', ['You look amazing', 'You are so smart', 'I am proud of you', 'You make me laugh']],
+      ['When I miss you I…', ['Text you', 'Look at our photos', 'Call you', 'Pretend I am fine']],
+      ['Our song is more…', ['A love ballad', 'A party song', 'A cheesy classic', 'We do not have one (yet)']],
+      ['Jealous type?', ['Not at all', 'A tiny bit', 'Secretly yes', 'Very']],
+      ['My favourite part of our routine?', ['Morning coffee', 'Dinner together', 'Bedtime talks', 'Weekend plans']],
+      ['Biggest turn-off?', ['Rudeness', 'Being late', 'Bad hygiene', 'Phone at dinner']],
+      ['How I want to be cheered up?', ['A hug', 'Food', 'Jokes', 'Space']]
+    ]
+  },
+  spicy: {
+    label: 'Spicy 18+', emoji: '🔥',
+    items: [
+      ['Where do I love being kissed most?', ['The lips', 'The neck', 'The forehead', 'Behind the ear']],
+      ['My idea of a sexy evening?', ['Candles and music', 'A fancy night out', 'A hotel room', 'A surprise at home']],
+      ['What gets me in the mood fastest?', ['Compliments', 'A massage', 'Teasing', 'A slow dance']],
+      ['My most attractive feature, in my opinion?', ['My eyes', 'My smile', 'My body', 'My confidence']],
+      ['What I notice first about you?', ['Your eyes', 'Your lips', 'Your scent', 'Your voice']],
+      ['Flirting style?', ['Bold and direct', 'Shy and sweet', 'Teasing', 'All through texts']],
+      ['Favourite kind of kiss?', ['Slow and soft', 'Passionate', 'Playful', 'Surprise kisses']],
+      ['The outfit of yours I like best?', ['Dressed up', 'Comfy at home', 'Sporty', 'Just a shirt']],
+      ['Who makes the first move more often?', ['Me', 'You', 'Fifty-fifty', 'Nobody — it just happens']],
+      ['The most romantic place to be alone with you?', ['A beach at night', 'A cabin', 'A hotel suite', 'Our own bedroom']],
+      ['A sweet secret fantasy?', ['A weekend away', 'A candlelit bath', 'Dancing in the dark', 'A surprise date']],
+      ['Spicy texts are…', ['My thing', 'Fun sometimes', 'Too awkward', 'Better in person']],
+      ['Morning or night for romance?', ['Morning', 'Afternoon', 'Late night', 'Any time']],
+      ['What makes me blush the most?', ['Compliments', 'Your stare', 'Whispers', 'Teasing in public']]
+    ]
+  },
+  past: {
+    label: 'Memories', emoji: '📸',
+    items: [
+      ['As a kid I wanted to be…', ['An astronaut', 'A doctor', 'A footballer or athlete', 'A singer or actor']],
+      ['At school I was…', ['The good student', 'The class clown', 'The quiet one', 'Always in trouble']],
+      ['My first phone?', ['A Nokia', 'A flip phone', 'A smartphone', 'Do not remember']],
+      ['Favourite childhood cartoon?', ['Tom & Jerry', 'Dragon Ball', 'Pokémon', 'The Simpsons']],
+      ['Best school subject?', ['Maths', 'Languages', 'Sport', 'Art']],
+      ['Childhood fear?', ['The dark', 'Dogs', 'Doctors', 'Being alone']],
+      ['Best family holiday?', ['The beach', 'The countryside', 'Abroad', 'Staying at grandma’s']],
+      ['First crush was on…', ['A classmate', 'A celebrity', 'A neighbour', 'A cartoon character']]
+    ]
+  },
+  would: {
+    label: 'What would I do?', emoji: '🤔',
+    items: [
+      ['I find a wallet full of cash. I…', ['Return it all', 'Hand it to the police', 'Keep a reward', 'Panic']],
+      ['A spider in the room. I…', ['Kill it', 'Save it outside', 'Call for help', 'Move house']],
+      ['Free afternoon, no plans. I…', ['Nap', 'Go out', 'Call someone', 'Binge a series']],
+      ['The waiter brings the wrong dish. I…', ['Eat it anyway', 'Politely ask again', 'Complain loudly', 'Make you ask']],
+      ['I get lost in a new city. I…', ['Use the map', 'Ask a local', 'Wander happily', 'Call you']],
+      ['Someone cuts the queue. I…', ['Say something', 'Glare silently', 'Let it go', 'Tell you later']],
+      ['A friend forgets my birthday. I…', ['Say nothing', 'Remind them', 'Get sulky', 'Laugh it off']],
+      ['I win €1,000 tomorrow. First buy?', ['Clothes', 'Tech', 'A trip', 'Nothing — save it']]
+    ]
+  },
+  dreams: {
+    label: 'Dreams', emoji: '✨',
+    items: [
+      ['Dream destination?', ['Japan', 'The Maldives', 'Iceland', 'Peru']],
+      ['Win the lottery — first move?', ['Buy a house', 'Travel the world', 'Spoil the family', 'Save every cent']],
+      ['Dream job?', ['Artist', 'Entrepreneur', 'Doctor', 'Explorer']],
+      ['Where would I live?', ['A big city', 'By the sea', 'In the countryside', 'Abroad']],
+      ['Skill I would love to master?', ['An instrument', 'A new language', 'Cooking', 'Drawing']],
+      ['Dream car?', ['Something classic', 'Electric', 'A big 4x4', 'I do not care about cars']],
+      ['Life in ten years?', ['Calm family life', 'A big career', 'Travelling', 'Running my own thing']],
+      ['A day with no rules — I would…', ['Sleep in', 'Go on an adventure', 'Gather everyone I love', 'Learn something new']],
+      ['Biggest goal this year?', ['Health', 'Money', 'Love', 'Career']],
+      ['Dream wedding?', ['Big and loud', 'Small and intimate', 'Abroad', 'Courthouse and a party']],
+      ['If I wrote a book it would be…', ['A love story', 'A thriller', 'A cookbook', 'My life story']],
+      ['Retirement plan?', ['A house by the sea', 'Travel non-stop', 'Near the grandkids', 'Never retire']]
+    ]
+  },
+  fun: {
+    label: 'Just for fun', emoji: '😄',
+    items: [
+      ['Which animal am I most like?', ['A cat', 'A dog', 'An owl', 'A dolphin']],
+      ['Karaoke genre?', ['Pop', 'Rap', 'Golden oldies', 'I refuse to sing']],
+      ['Role in a zombie apocalypse?', ['The leader', 'The medic', 'The cook', 'First to go']],
+      ['Hidden talent?', ['Cooking', 'Impressions', 'Dancing', 'Fixing things']],
+      ['Grab one thing in a hurry?', ['My phone', 'Photos', 'My pet', 'My passport']],
+      ['Scariest for me?', ['Spiders', 'Heights', 'Public speaking', 'Deep water']],
+      ['Favourite film genre?', ['Comedy', 'Action', 'Romance', 'Horror']],
+      ['My texting style?', ['Long paragraphs', 'One word', 'Only emojis', 'Voice notes']],
+      ['My most-used emoji?', ['😂', '❤️', '😭', '👍']],
+      ['Which celebrity would play me in a film?', ['A comedy star', 'An action hero', 'A drama queen or king', 'A cartoon voice']],
+      ['If I were a dessert?', ['Chocolate cake', 'Ice cream', 'Baklava', 'Something spicy']],
+      ['Game I always win?', ['Cards', 'Quizzes', 'Video games', 'Arguments']]
+    ]
+  }
+};
+
+const G = makePairGame({
+  bank: BANK,
+  mode: 'guess',
+  rounds: 10,
+  cats: ['me', 'food', 'fun', 'dreams'],
+  options: (it) => it[1],
+  ask: (it, { role, subject }) => ({
+    eyebrow: role === 'self' ? 'About you' : `About ${subject}`,
+    text: it[0]
+  }),
+  hitLine: (r) => `${r.nSecond} knows ${r.nFirst} well. +1`,
+  missLine: (r) => `Not quite — ${r.nFirst}, tell the story.`
+});
+
+const meta = {
+  id: 'knowme',
+  group: ['couple', 'friends'],
+  title: 'Know Me?',
+  emoji: '🔮',
+  tagline: 'How well do you really know each other?',
+  blurb: 'One answers about themselves in secret, the other guesses. Roles swap every round — the sharpest guesser wins. Eight decks, spicy one included.',
+  minutes: '8 min',
+  tags: ['Couples', 'Friends', '8 decks'],
+  local: true,
+  alternate: true,
+  levels: [],
+  settings: [
+    {
+      id: 'rounds', label: 'Questions per game', def: 10,
+      options: [{ v: 6, label: '6' }, { v: 10, label: '10' }, { v: 16, label: '16' }, { v: 20, label: '20' }, { v: 30, label: '30' }]
+    }
+  ],
+  rules: [
+    'Each round one of you is the subject and answers about themselves — in secret.',
+    'The other guesses what the subject chose.',
+    'A correct guess scores 1 point. Roles swap every round.',
+    'Most correct guesses wins. Pick the decks with the chips; set the length in Settings.'
+  ]
+};
+
+function create(opts) { return G.create(opts); }
+function turn(state) { return G.turn(state); }
+function apply(state, move) { return G.apply(state, move); }
+function outcome(state) { return G.outcome(state); }
+function auto() { return null; }
+function ai() { return null; }
+function note(state, seat) { return G.note(state, seat); }
+function summary(state) { return G.summary(state); }
+function view(state, ctx) { return G.view(state, ctx); }
+function bind(root, state, ctx, play) { return G.bind(root, state, ctx, play); }
+function coach(state, ctx) { return G.coach(state, ctx); }
+return Object.freeze({ meta, create, turn, apply, outcome, auto, ai, note, summary, view, bind, coach });
+  })();
+
+  /* ===== js/arcade/games/quiz.js ===== */
+  const __m31 = (function () {
+const { esc, rand, shuffle, draw, catChips, bindCats, validCats, beads, burst } = __m27;
+/**
+ * LifeFlow Arcade — Quiz Duel.
+ * Ten questions, ten categories. Both players answer the same question in turn —
+ * the second never sees it until it is theirs. Right answers score 10, plus up to 10 for speed.
+ */
+
+
+const TOTAL = 10;
+const LIMIT = 20000;
+
+/** Settings travel inside the state so both players share them. */
+const totalOf = (s) => s.total || TOTAL;
+const limitOf = (s) => (s.limit === 0 ? 0 : s.limit || LIMIT);
+const clockOf = (s) => limitOf(s) || 60000;
+
+/** Each item: [question, [correct, wrong, wrong, wrong]]. */
+const BANK = {
+  geo: {
+    label: 'Geography', emoji: '🌍',
+    items: [
+      ['What is the capital of Australia?', ['Canberra', 'Sydney', 'Melbourne', 'Perth']],
+      ['Which is the longest river in Africa?', ['The Nile', 'The Congo', 'The Niger', 'The Zambezi']],
+      ['What is the largest ocean on Earth?', ['Pacific', 'Atlantic', 'Indian', 'Arctic']],
+      ['What is the largest hot desert in the world?', ['Sahara', 'Gobi', 'Kalahari', 'Atacama']],
+      ['What is the capital of Canada?', ['Ottawa', 'Toronto', 'Vancouver', 'Montreal']],
+      ['What is the capital of Morocco?', ['Rabat', 'Casablanca', 'Marrakech', 'Fes']],
+      ['Which country is shaped like a boot?', ['Italy', 'Greece', 'Portugal', 'Chile']],
+      ['Which strait separates Spain from Morocco?', ['Gibraltar', 'Bosphorus', 'Hormuz', 'Magellan']],
+      ['What is the smallest country in the world?', ['Vatican City', 'Monaco', 'San Marino', 'Malta']],
+      ['Mount Everest lies on the border of Nepal and…', ['China', 'India', 'Bhutan', 'Pakistan']],
+      ['Which mountain range runs through Morocco?', ['The Atlas', 'The Andes', 'The Alps', 'The Urals']]
+    ]
+  },
+  science: {
+    label: 'Science', emoji: '🔬',
+    items: [
+      ['Which gas do plants absorb from the air?', ['Carbon dioxide', 'Oxygen', 'Nitrogen', 'Helium']],
+      ['Which planet is known as the Red Planet?', ['Mars', 'Venus', 'Jupiter', 'Mercury']],
+      ['How many bones are in the adult human body?', ['206', '201', '212', '186']],
+      ['What is the hardest natural substance?', ['Diamond', 'Gold', 'Iron', 'Quartz']],
+      ['What is the closest star to Earth?', ['The Sun', 'Proxima Centauri', 'Sirius', 'Polaris']],
+      ['Light travels at roughly…', ['300,000 km/s', '30,000 km/s', '3,000 km/s', '3 million km/s']],
+      ['What is the chemical symbol for gold?', ['Au', 'Ag', 'Gd', 'Go']],
+      ['Which organ pumps blood around the body?', ['The heart', 'The liver', 'The lungs', 'The kidneys']],
+      ['What is the largest planet in our solar system?', ['Jupiter', 'Saturn', 'Neptune', 'Earth']],
+      ['At sea level, water boils at…', ['100 °C', '90 °C', '110 °C', '120 °C']],
+      ['What do we call H₂O?', ['Water', 'Salt', 'Hydrogen peroxide', 'Ammonia']]
+    ]
+  },
+  history: {
+    label: 'History', emoji: '🏛️',
+    items: [
+      ['In which year did humans first land on the Moon?', ['1969', '1965', '1972', '1959']],
+      ['Who was the first person in space?', ['Yuri Gagarin', 'Neil Armstrong', 'Alan Shepard', 'John Glenn']],
+      ['Which ancient wonder still stands today?', ['The Great Pyramid of Giza', 'The Colossus of Rhodes', 'The Hanging Gardens of Babylon', 'The Lighthouse of Alexandria']],
+      ['In which year did the Berlin Wall fall?', ['1989', '1991', '1979', '1985']],
+      ['Which civilisation built Machu Picchu?', ['The Inca', 'The Aztecs', 'The Maya', 'The Olmecs']],
+      ['In which year did the Titanic sink?', ['1912', '1905', '1920', '1898']],
+      ['Who was the first emperor of Rome?', ['Augustus', 'Julius Caesar', 'Nero', 'Constantine']],
+      ['In which year did World War II end?', ['1945', '1944', '1946', '1939']],
+      ['In which city did Fatima al-Fihri found al-Qarawiyyin?', ['Fes', 'Cairo', 'Baghdad', 'Córdoba']],
+      ['Who was the first person to walk on the Moon?', ['Neil Armstrong', 'Buzz Aldrin', 'Yuri Gagarin', 'Michael Collins']]
+    ]
+  },
+  arts: {
+    label: 'Arts & books', emoji: '🎨',
+    items: [
+      ['Who painted the Mona Lisa?', ['Leonardo da Vinci', 'Michelangelo', 'Raphael', 'Picasso']],
+      ['Who wrote "Romeo and Juliet"?', ['William Shakespeare', 'Charles Dickens', 'Victor Hugo', 'Molière']],
+      ['Who wrote "Les Misérables"?', ['Victor Hugo', 'Alexandre Dumas', 'Émile Zola', 'Gustave Flaubert']],
+      ['Who painted "The Starry Night"?', ['Vincent van Gogh', 'Edvard Munch', 'Henri Matisse', 'Rembrandt']],
+      ['How many keys does a standard piano have?', ['88', '76', '92', '64']],
+      ['In which city is the Louvre museum?', ['Paris', 'Rome', 'London', 'Madrid']],
+      ['Who sculpted the famous "David" in Florence?', ['Michelangelo', 'Donatello', 'Bernini', 'Rodin']],
+      ['Who wrote "The Little Prince"?', ['Antoine de Saint-Exupéry', 'Jules Verne', 'Albert Camus', 'Victor Hugo']],
+      ['Which language has the most native speakers?', ['Mandarin Chinese', 'English', 'Spanish', 'Hindi']],
+      ['How many strings does a classical guitar usually have?', ['6', '4', '5', '8']]
+    ]
+  },
+  sport: {
+    label: 'Sport', emoji: '⚽',
+    items: [
+      ['How many players does a football team have on the pitch?', ['11', '10', '9', '12']],
+      ['How often are the Summer Olympics held?', ['Every 4 years', 'Every 2 years', 'Every 3 years', 'Every 5 years']],
+      ['Which country won the first FIFA World Cup in 1930?', ['Uruguay', 'Brazil', 'Argentina', 'Italy']],
+      ['In tennis, what is a score of zero called?', ['Love', 'Nil', 'Zero', 'Duck']],
+      ['How long is a marathon?', ['42.195 km', '40 km', '45 km', '38.5 km']],
+      ['Which sport uses a shuttlecock?', ['Badminton', 'Squash', 'Tennis', 'Table tennis']],
+      ['How many rings are on the Olympic flag?', ['5', '4', '6', '7']],
+      ['In which sport would you perform a slam dunk?', ['Basketball', 'Volleyball', 'Handball', 'Rugby']],
+      ['Which country hosted the 2022 FIFA World Cup?', ['Qatar', 'Russia', 'Brazil', 'Morocco']],
+      ['How far did Morocco go at the 2022 World Cup?', ['Semi-finals', 'Quarter-finals', 'The final', 'Round of 16']]
+    ]
+  },
+  screen: {
+    label: 'Film & music', emoji: '🎬',
+    items: [
+      ['Which film features the line "I\u2019ll be back"?', ['The Terminator', 'Rocky', 'Die Hard', 'Predator']],
+      ['Who is the young lion hero of "The Lion King"?', ['Simba', 'Mufasa', 'Nala', 'Scar']],
+      ['Which band recorded "Bohemian Rhapsody"?', ['Queen', 'The Beatles', 'ABBA', 'The Rolling Stones']],
+      ['"Thriller" is a famous album by…', ['Michael Jackson', 'Prince', 'Madonna', 'Stevie Wonder']],
+      ['Which school does Harry Potter attend?', ['Hogwarts', 'Durmstrang', 'Beauxbatons', 'Ilvermorny']],
+      ['Which film won the first Oscar for Best Animated Feature?', ['Shrek', 'Toy Story', 'Finding Nemo', 'Monsters, Inc.']],
+      ['Beethoven kept composing despite losing his…', ['Hearing', 'Sight', 'Sense of smell', 'Voice']],
+      ['What is the snowman called in "Frozen"?', ['Olaf', 'Sven', 'Kristoff', 'Hans']],
+      ['Who directed "Jurassic Park"?', ['Steven Spielberg', 'James Cameron', 'George Lucas', 'Ridley Scott']],
+      ['How many strings does a violin have?', ['4', '5', '6', '3']],
+      ['Who sang "Rolling in the Deep"?', ['Adele', 'Beyoncé', 'Rihanna', 'Shakira']]
+    ]
+  },
+  nature: {
+    label: 'Animals & nature', emoji: '🐾',
+    items: [
+      ['What is the fastest land animal?', ['Cheetah', 'Lion', 'Pronghorn', 'Horse']],
+      ['What is the largest animal that has ever lived?', ['Blue whale', 'African elephant', 'Giraffe', 'Sperm whale']],
+      ['How many legs does a spider have?', ['8', '6', '10', '12']],
+      ['Which animal is called the "ship of the desert"?', ['The camel', 'The horse', 'The donkey', 'The elephant']],
+      ['How many hearts does an octopus have?', ['3', '1', '2', '4']],
+      ['What is a baby kangaroo called?', ['A joey', 'A kit', 'A cub', 'A calf']],
+      ['Which tree grows acorns?', ['Oak', 'Pine', 'Maple', 'Olive']],
+      ['What is the tallest animal?', ['Giraffe', 'Elephant', 'Camel', 'Ostrich']],
+      ['What do bees make from nectar?', ['Honey', 'Silk', 'Pollen', 'Resin']],
+      ['What does a caterpillar become?', ['A butterfly or moth', 'A beetle', 'A bee', 'A dragonfly']]
+    ]
+  },
+  food: {
+    label: 'Food', emoji: '🍜',
+    items: [
+      ['Which country does sushi come from?', ['Japan', 'China', 'Korea', 'Thailand']],
+      ['The tajine is named after…', ['The clay pot it cooks in', 'A spice', 'A city', 'A famous chef']],
+      ['Guacamole is mainly made from…', ['Avocado', 'Peas', 'Cucumber', 'Lime']],
+      ['Which spice is the most expensive by weight?', ['Saffron', 'Turmeric', 'Cumin', 'Paprika']],
+      ['Hummus is made mainly from…', ['Chickpeas', 'Lentils', 'White beans', 'Peas']],
+      ['Raisins are dried…', ['Grapes', 'Plums', 'Figs', 'Dates']],
+      ['Pizza Margherita is linked to which Italian city?', ['Naples', 'Rome', 'Milan', 'Venice']],
+      ['Marzipan is made from which nut?', ['Almond', 'Walnut', 'Peanut', 'Hazelnut']],
+      ['Pad thai comes from…', ['Thailand', 'Vietnam', 'Japan', 'India']],
+      ['Tofu is made from…', ['Soybeans', 'Rice', 'Wheat', 'Chickpeas']]
+    ]
+  },
+  tech: {
+    label: 'Tech', emoji: '💻',
+    items: [
+      ['What does "www" stand for?', ['World Wide Web', 'World Web Wide', 'Wide World Web', 'Web World Wide']],
+      ['Who co-founded Microsoft with Paul Allen?', ['Bill Gates', 'Steve Jobs', 'Larry Page', 'Mark Zuckerberg']],
+      ['What does "CPU" stand for?', ['Central Processing Unit', 'Computer Personal Unit', 'Central Program Utility', 'Core Power Unit']],
+      ['Which company makes the iPhone?', ['Apple', 'Samsung', 'Google', 'Nokia']],
+      ['How many bits are in a byte?', ['8', '4', '16', '10']],
+      ['What does "AI" stand for?', ['Artificial intelligence', 'Automated internet', 'Advanced interface', 'Analog input']],
+      ['Which language styles web pages?', ['CSS', 'SQL', 'Python', 'C']],
+      ['What does "USB" stand for?', ['Universal Serial Bus', 'United System Board', 'Universal Signal Box', 'User Service Bridge']],
+      ['How is the number 2 written in binary?', ['10', '2', '11', '01']],
+      ['Which symbol starts a hashtag?', ['#', '@', '&', '*']]
+    ]
+  },
+  islam: {
+    label: 'Islamic culture', emoji: '🕌',
+    items: [
+      ['How many surahs are in the Qur\u2019an?', ['114', '110', '120', '99']],
+      ['What was the first word revealed to the Prophet ﷺ?', ['Iqra (Read)', 'Bismillah', 'Alhamdulillah', 'Qul (Say)']],
+      ['Which is the longest surah of the Qur\u2019an?', ['Al-Baqarah', 'Al-Imran', 'An-Nisa', 'Al-Kahf']],
+      ['In which month do Muslims fast?', ['Ramadan', 'Shawwal', 'Muharram', 'Rajab']],
+      ['How many pillars of Islam are there?', ['5', '4', '6', '7']],
+      ['In which city is the Kaaba?', ['Mecca', 'Medina', 'Jerusalem', 'Taif']],
+      ['What is the opening surah of the Qur\u2019an?', ['Al-Fatiha', 'Al-Baqarah', 'Al-Ikhlas', 'An-Nas']],
+      ['The Hijra was the migration from Mecca to…', ['Medina', 'Taif', 'Jerusalem', 'Abyssinia']],
+      ['How many daily prayers are prescribed?', ['5', '3', '4', '6']],
+      ['Which night is "better than a thousand months"?', ['Laylat al-Qadr', 'Laylat al-Isra', 'The night of Eid', 'The first night of Muharram']],
+      ['Which is the shortest surah of the Qur\u2019an?', ['Al-Kawthar', 'Al-Ikhlas', 'An-Nas', 'Al-Asr']]
+    ]
+  }
+};
+
+const ACCURACY = { gentle: 0.45, even: 0.65, sharp: 0.85 };
+
+const meta = {
+  id: 'quiz',
+  group: ['brain', 'friends'],
+  title: 'Quiz Duel',
+  emoji: '🧠',
+  tagline: 'Same question, two minds, one clock.',
+  blurb: 'Ten categories from geography to film to Islamic culture. Answer right for 10 points and fast for up to 10 more — the other player never sees the question early.',
+  minutes: '6 min',
+  tags: ['Trivia', '10 categories'],
+  alternate: true,
+  levels: [
+    { id: 'gentle', label: 'Gentle', hint: 'Knows a bit, takes its time.' },
+    { id: 'even', label: 'Even', hint: 'A solid pub-quiz regular.' },
+    { id: 'sharp', label: 'Sharp', hint: 'Knows nearly everything — and fast.' }
+  ],
+  settings: [
+    {
+      id: 'total', label: 'Questions', def: 10,
+      options: [{ v: 5, label: '5' }, { v: 10, label: '10' }, { v: 15, label: '15' }, { v: 20, label: '20' }, { v: 30, label: '30' }]
+    },
+    {
+      id: 'limit', label: 'Time per question', def: 20000,
+      options: [{ v: 10000, label: '10 s' }, { v: 20000, label: '20 s' }, { v: 30000, label: '30 s' }, { v: 0, label: 'Relaxed' }]
+    },
+    {
+      id: 'speed', label: 'Speed bonus', def: 1,
+      options: [{ v: 1, label: 'On' }, { v: 0, label: 'Off' }]
+    }
+  ],
+  rules: [
+    'Both players answer every question, taking turns to go first.',
+    'The second player only sees the question when it is their turn.',
+    'A right answer scores 10, plus up to 10 for speed.',
+    'Three right in a row earns a 5-point streak bonus.',
+    'Settings: number of questions, time per question (or relaxed), speed bonus.'
+  ]
+};
+
+const pick = (v, allowed, def) => (allowed.includes(v) ? v : def);
+
+function deal(state, cats) {
+  const d = draw(BANK, cats, state.used);
+  return { q: { c: d.c, i: d.i, o: shuffle([0, 1, 2, 3]) }, used: d.used };
+}
+
+function create(opts = {}) {
+  const cats = validCats(BANK, opts.cats) ? opts.cats.slice() : ['geo', 'science', 'screen', 'nature', 'food'];
+  const base = {
+    gid: Math.random().toString(36).slice(2, 9), phase: 'answer', round: 0, turn: 0, ans: [-2, -2], ms: [0, 0], gain: [0, 0], scores: [0, 0], streak: [0, 0], used: [], cats, moves: 0,
+    total: pick(opts.total, [5, 10, 15, 20, 30], TOTAL),
+    limit: pick(opts.limit, [10000, 20000, 30000, 0], LIMIT),
+    speed: pick(opts.speed, [0, 1], 1)
+  };
+  return { ...base, ...deal(base, base.cats) };
+}
+
+function turn(state) {
+  if (state.phase === 'reveal') return 1 - state.turn;
+  return state.ans[state.turn] === -2 ? state.turn : 1 - state.turn;
+}
+
+const untouched = (s) => s.phase === 'answer' && s.ans[0] === -2 && s.ans[1] === -2;
+const item = (s) => BANK[s.q.c].items[s.q.i];
+
+function apply(state, move) {
+  if (!move || outcome(state).over) return null;
+
+  if (move.cats !== undefined) {
+    if (!untouched(state) || !validCats(BANK, move.cats)) return null;
+    return { ...state, cats: move.cats.slice(), ...deal(state, move.cats), moves: state.moves + 1 };
+  }
+
+  if (move.a !== undefined) {
+    const a = move.a;
+    if (state.phase !== 'answer' || !Number.isInteger(a) || a < -1 || a > 3) return null;
+    const seat = turn(state);
+    const ms = Math.max(0, Math.min(clockOf(state), Number(move.ms) || 0));
+    const right = a >= 0 && state.q.o[a] === 0;
+    const ans = state.ans.slice();
+    const times = state.ms.slice();
+    const gain = state.gain.slice();
+    const scores = state.scores.slice();
+    const streak = state.streak.slice();
+    ans[seat] = a;
+    times[seat] = ms;
+    streak[seat] = right ? streak[seat] + 1 : 0;
+    const fast = state.speed === 0 ? 0 : Math.round(10 * (1 - ms / clockOf(state)));
+    gain[seat] = right ? 10 + fast + (streak[seat] >= 3 ? 5 : 0) : 0;
+    scores[seat] += gain[seat];
+    const both = ans[0] !== -2 && ans[1] !== -2;
+    return { ...state, ans, ms: times, gain, scores, streak, phase: both ? 'reveal' : 'answer', moves: state.moves + 1 };
+  }
+
+  if (move.next) {
+    if (state.phase !== 'reveal') return null;
+    const round = state.round + 1;
+    const base = { ...state, round, turn: 1 - state.turn, phase: 'answer', ans: [-2, -2], ms: [0, 0], gain: [0, 0], moves: state.moves + 1 };
+    return round < totalOf(state) ? { ...base, ...deal(state, state.cats) } : base;
+  }
+
+  return null;
+}
+
+function outcome(state) {
+  if (state.round < totalOf(state)) return { over: false };
+  const [a, b] = state.scores;
+  if (a === b) return { over: true, winner: null, draw: true };
+  return { over: true, winner: a > b ? 0 : 1, draw: false };
+}
+
+function auto(state) {
+  if (state.phase === 'reveal' && state.round < totalOf(state)) return { move: { next: true }, delay: 3600 };
+  return null;
+}
+
+/** The computer "reads" for a moment before answering. */
+function pace(state) {
+  return state.phase === 'answer' ? 1200 + Math.random() * 2400 : 0;
+}
+
+function ai(state, seat, level = 'even') {
+  if (state.phase !== 'answer') return null;
+  const right = state.q.o.indexOf(0);
+  const p = ACCURACY[level] ?? 0.65;
+  const wrong = [0, 1, 2, 3].filter((k) => k !== right);
+  const a = Math.random() < p ? right : wrong[rand(3)];
+  const ms = (level === 'sharp' ? 2500 : 4000) + Math.random() * (level === 'gentle' ? 9000 : 6000);
+  return { a, ms: Math.round(ms) };
+}
+
+function note(state, seat) {
+  const s = state.streak[seat];
+  return `${state.scores[seat]} pts${s >= 2 ? ` · 🔥${s}` : ''}`;
+}
+
+/* ------------------------------ view ------------------------------ */
+function view(state, ctx) {
+  const over = outcome(state).over;
+  const n = (s) => ctx.names[s] || `Player ${s + 1}`;
+
+  if (over) {
+    const w = outcome(state).winner;
+    return `
+      <div class="quiz quiz--over">
+        <div class="quiz__final">
+          <span class="quiz__final-ico" aria-hidden="true">${w == null ? '🤝' : '🏆'}</span>
+          <div class="quiz__podium">
+            ${[0, 1].map((s) => `<div class="quiz__pod quiz__pod--${s}${w === s ? ' is-win' : ''}" style="--h:${Math.max(18, Math.round((state.scores[s] / Math.max(1, ...state.scores)) * 100))}%"><b>${state.scores[s]}</b><span>${esc(n(s))}</span></div>`).join('')}
+          </div>
+        </div>
+      </div>`;
+  }
+
+  const [question, opts] = item(state);
+  const viewer = ctx.seat;
+  const reveal = state.phase === 'reveal';
+  const answered = state.ans[viewer] !== -2;
+  const showQ = reveal || ctx.myTurn || answered;
+  const right = state.q.o.indexOf(0);
+  const cat = BANK[state.q.c];
+
+  const optHtml = state.q.o
+    .map((src, k) => {
+      const cls = [];
+      if (reveal && k === right) cls.push('is-right');
+      if (reveal && k !== right && (state.ans[0] === k || state.ans[1] === k)) cls.push('is-wrong');
+      if (!reveal && answered && state.ans[viewer] === k) cls.push('is-mine');
+      const tags = reveal ? [0, 1].filter((s) => state.ans[s] === k).map((s) => `<span class="quiz__tag quiz__tag--${s}" title="${esc(n(s))}">${esc(n(s).slice(0, 1).toUpperCase())}</span>`).join('') : '';
+      return `<button class="quiz__opt ${cls.join(' ')}" type="button" data-a="${k}" style="--k:${k}" ${ctx.myTurn && !reveal ? '' : 'disabled'}>
+                <span class="quiz__key" aria-hidden="true">${'ABCD'[k]}</span><span class="quiz__label">${esc(opts[src])}</span>${tags}
+              </button>`;
+    })
+    .join('');
+
+  const gains = reveal
+    ? `<div class="quiz__gains">${[0, 1]
+        .map((s) => `<span class="quiz__gain quiz__gain--${s}${state.gain[s] ? '' : ' is-zero'}"><b>${state.gain[s] ? `+${state.gain[s]}` : state.ans[s] === -1 ? '⏱ 0' : '0'}</b> ${esc(n(s))}${state.gain[s] && state.streak[s] >= 3 ? ' 🔥' : ''}</span>`)
+        .join('')}</div>`
+    : '';
+
+  let footer = '';
+  if (reveal) footer = ctx.myTurn ? `<button class="btn btn--primary btn--sm" type="button" data-next>${state.round + 1 >= totalOf(state) ? 'Final score' : 'Next'} →</button>` : '';
+  else if (!ctx.myTurn) footer = `<p class="quiz__wait">${answered ? `🔒 Locked in. ${esc(n(1 - viewer))} is answering…` : `🤫 ${esc(n(turn(state)))} is answering — your question is hidden.`}</p>`;
+
+  return `
+    <div class="quiz quiz--${state.phase}">
+      ${catChips(BANK, state.cats, untouched(state) && ctx.myTurn)}
+      ${beads(state.round, totalOf(state), state.round)}
+      <div class="quiz__card" data-qkey="${state.gid}:${state.round}">
+        <div class="quiz__meta"><span>${cat.emoji} ${esc(cat.label)}</span><span>Question ${state.round + 1} / ${totalOf(state)}</span></div>
+        <h3 class="quiz__q${showQ ? '' : ' is-hidden'}">${showQ ? esc(question) : 'Hidden until it is your turn'}</h3>
+        ${!reveal && ctx.myTurn && limitOf(state) ? `<div class="quiz__timer"><i data-timer></i><span data-secs>${limitOf(state) / 1000}</span></div>` : ''}
+        <div class="quiz__opts${showQ ? '' : ' is-hidden'}">${optHtml}</div>
+        ${gains}
+      </div>
+      ${footer}
+    </div>`;
+}
+
+let ticker = null;
+const starts = new Map();
+const cheered = new Set();
+
+function bind(root, state, ctx, play) {
+  clearInterval(ticker);
+  ticker = null;
+  bindCats(root, state.cats, play);
+  root.querySelector('[data-next]')?.addEventListener('click', () => play({ next: true }));
+
+  if (state.phase === 'reveal') {
+    const key = `${state.gid}:${state.round}`;
+    if (!cheered.has(key) && state.gain[ctx.seat] > 0) {
+      cheered.add(key);
+      burst(root.querySelector('.quiz__card'), ['✨', '⭐', '🧠'], 10);
+    }
+  }
+
+  if (state.phase !== 'answer' || !ctx.myTurn) return;
+
+  const key = `${state.gid}:${state.round}:${ctx.seat}`;
+  if (!starts.has(key)) starts.set(key, Date.now());
+  const t0 = starts.get(key);
+  const bar = root.querySelector('[data-timer]');
+  const secs = root.querySelector('[data-secs]');
+  let sent = false;
+
+  const send = (a) => {
+    if (sent) return;
+    sent = true;
+    clearInterval(ticker);
+    ticker = null;
+    play({ a, ms: Math.min(clockOf(state), Date.now() - t0) });
+  };
+
+  root.querySelectorAll('[data-a]').forEach((b) => b.addEventListener('click', () => send(Number(b.dataset.a))));
+
+  const limit = limitOf(state);
+  if (!limit) return;
+  const step = () => {
+    if (!root.isConnected) { clearInterval(ticker); ticker = null; return; }
+    const left = Math.max(0, limit - (Date.now() - t0));
+    if (bar) bar.style.transform = `scaleX(${left / limit})`;
+    if (secs) secs.textContent = String(Math.ceil(left / 1000));
+    root.querySelector('.quiz__timer')?.classList.toggle('is-low', left < 5000);
+    if (left <= 0) send(-1);
+  };
+  step();
+  ticker = setInterval(step, 100);
+}
+
+function coach(state, ctx) {
+  if (outcome(state).over) return 'Rematch with new categories — the deck never repeats until it runs out.';
+  if (state.phase === 'reveal') return 'Next question in a moment…';
+  return ctx.myTurn ? (state.speed === 0 ? 'Right answers score 10 — take your time.' : 'Right answers score 10, plus up to 10 for speed.') : 'Hold tight — no peeking.';
+}
+return Object.freeze({ meta, create, turn, apply, outcome, auto, pace, ai, note, view, bind, coach });
+  })();
+
+  /* ===== js/arcade/games/goose.js ===== */
+  const __m32 = (function () {
+const { esc, rand } = __m27;
+/**
+ * LifeFlow Arcade — Game of the Goose (Jeu de l'oie).
+ * Two dice, 63 squares, and a board full of geese, bridges, inns and wells.
+ * Land exactly on 63 to win. Pure luck — perfect for a laugh together.
+ */
+
+
+const END = 63;
+const GEESE = [5, 9, 14, 18, 23, 27, 32, 36, 41, 45, 50, 54, 59];
+const SPECIAL = {
+  0: { ico: '🏠', name: 'Start' },
+  6: { ico: '🌉', name: 'Bridge — jump to 12' },
+  19: { ico: '🏨', name: 'Inn — rest one turn' },
+  26: { ico: '🎲', name: 'Lucky dice' },
+  31: { ico: '🕳️', name: 'Well — stuck two turns' },
+  42: { ico: '🌀', name: 'Maze — back to 30' },
+  52: { ico: '⛓️', name: 'Prison — stuck three turns' },
+  53: { ico: '🎲', name: 'Lucky dice' },
+  58: { ico: '💀', name: 'Skull — back to the start' },
+  63: { ico: '🏆', name: 'The garden — finish' }
+};
+const STEP = 170;
+/** Squares switched off in the gentle variant. */
+const HARSH = [31, 52, 58];
+const active = (s, n) => !(s.hazards === 'gentle' && HARSH.includes(n));
+
+const meta = {
+  id: 'goose',
+  group: ['board', 'friends'],
+  title: 'Game of the Goose',
+  emoji: '🪿',
+  tagline: 'Jeu de l\u2019oie — roll, fly, and mind the well.',
+  blurb: 'The centuries-old family race. Geese fly you forward, bridges and mazes move you around, and the skull sends you home. First to land exactly on 63 wins.',
+  minutes: '8 min',
+  tags: ['Dice', 'Family classic'],
+  alternate: true,
+  levels: [],
+  settings: [
+    {
+      id: 'hazards', label: 'Board', def: 'classic',
+      options: [{ v: 'classic', label: 'Classic' }, { v: 'gentle', label: 'Gentle — no well, prison or skull' }]
+    },
+    {
+      id: 'finish', label: 'Finish', def: 'exact',
+      options: [{ v: 'exact', label: 'Exact roll (bounce back)' }, { v: 'relaxed', label: 'Any roll reaching 63' }]
+    },
+    {
+      id: 'bump', label: 'Bumping', def: 1,
+      options: [{ v: 1, label: 'On' }, { v: 0, label: 'Off' }]
+    }
+  ],
+  rules: [
+    'Roll two dice and move your pawn that many squares.',
+    'Land on a goose 🪿 and you fly forward again by the same roll.',
+    'Bridge 🌉 jumps to 12 · Inn 🏨 rests 1 turn · Well 🕳️ 2 turns · Prison ⛓️ 3 turns.',
+    'Maze 🌀 sends you back to 30, the skull 💀 back to the start.',
+    'A first throw of 6+3 flies to 26, 5+4 to 53.',
+    'Land on your rival and they are bumped back to where you came from.',
+    'You must hit 63 exactly — any extra steps bounce you back.',
+    'Settings: a gentle board without the harsh squares, a relaxed finish, and bumping on or off.'
+  ]
+};
+
+function create(opts = {}) {
+  return {
+    gid: Math.random().toString(36).slice(2, 9), pos: [0, 0], skip: [0, 0], turn: 0, dice: [0, 0], last: null, log: [], moves: 0,
+    hazards: opts.hazards === 'gentle' ? 'gentle' : 'classic',
+    finish: opts.finish === 'relaxed' ? 'relaxed' : 'exact',
+    bump: opts.bump === 0 ? 0 : 1
+  };
+}
+
+function turn(state) {
+  return state.turn;
+}
+
+function apply(state, move) {
+  if (!move || !move.roll || outcome(state).over) return null;
+
+  const p = state.turn;
+  const d = [1 + rand(6), 1 + rand(6)];
+  const sum = d[0] + d[1];
+  const pos = state.pos.slice();
+  const skip = state.skip.slice();
+  const from = pos[p];
+  const path = [];
+  const events = [];
+  let x = from;
+  let bounced = false;
+
+  const walk = (n) => {
+    let dir = 1;
+    for (let k = 0; k < n; k++) {
+      if (x === END) {
+        if (state.finish === 'relaxed') return;
+        dir = -1; bounced = true;
+      }
+      x += dir;
+      path.push(x);
+    }
+  };
+
+  const hi = Math.max(d[0], d[1]);
+  const lo = Math.min(d[0], d[1]);
+  if (from === 0 && hi === 6 && lo === 3) {
+    x = 26; path.push(26); events.push('🎲 6 + 3 on the first throw — fly to 26');
+  } else if (from === 0 && hi === 5 && lo === 4) {
+    x = 53; path.push(53); events.push('🎲 5 + 4 on the first throw — fly to 53');
+  } else {
+    walk(sum);
+  }
+
+  for (let guard = 0; guard < 12; guard++) {
+    if (GEESE.includes(x)) {
+      events.push(`🪿 Goose on ${x} — fly ${sum} more`);
+      walk(sum);
+      continue;
+    }
+    if (x === 6) { events.push('🌉 Bridge — over to 12'); x = 12; path.push(12); }
+    else if (x === 42) { events.push('🌀 Lost in the maze — back to 30'); x = 30; path.push(30); }
+    else if (x === 58 && active(state, 58)) { events.push('💀 The skull — back to the start'); x = 0; path.push(0); }
+    else if (x === 19) { skip[p] = 1; events.push('🏨 The inn — rest one turn'); }
+    else if (x === 31 && active(state, 31)) { skip[p] = 2; events.push('🕳️ Down the well — two turns'); }
+    else if (x === 52 && active(state, 52)) { skip[p] = 3; events.push('⛓️ Prison — three turns'); }
+    break;
+  }
+  if (bounced && x !== END) events.unshift('↩️ Overshot 63 — bounced back');
+
+  let bump = -1;
+  if (state.bump !== 0 && x !== 0 && x !== END && pos[1 - p] === x) {
+    pos[1 - p] = from;
+    bump = from;
+    events.push(`💥 Bump! The other pawn goes back to ${from}`);
+  }
+  pos[p] = x;
+  if (x === END) events.push('🏆 Into the garden!');
+
+  let next = 1 - p;
+  const skipped = [];
+  if (x !== END) {
+    for (let guard = 0; guard < 6 && skip[next] > 0; guard++) {
+      skip[next] -= 1;
+      skipped.push(next);
+      next = 1 - next;
+    }
+  }
+
+  const log = [{ seat: p, sum, ev: events.join(' · ') }, ...state.log].slice(0, 5);
+  return {
+    ...state,
+    pos,
+    skip,
+    turn: next,
+    dice: d,
+    last: { seat: p, from, path, bump, skipped },
+    log,
+    moves: state.moves + 1
+  };
+}
+
+function outcome(state) {
+  if (state.pos[0] === END) return { over: true, winner: 0, draw: false };
+  if (state.pos[1] === END) return { over: true, winner: 1, draw: false };
+  return { over: false };
+}
+
+function auto() {
+  return null;
+}
+
+/** Let the last pawn finish hopping before the computer rolls. */
+function pace(state) {
+  return state.last ? state.last.path.length * STEP + 700 : 0;
+}
+
+function ai() {
+  return { roll: true };
+}
+
+function note(state, seat) {
+  const s = state.skip[seat];
+  return `Square ${state.pos[seat]}${s ? ` · ⏳ ${s}` : ''}`;
+}
+
+/* ------------------------------ view ------------------------------ */
+function cell(n) {
+  const r = Math.floor(n / 8);
+  const c = r % 2 === 0 ? n % 8 : 7 - (n % 8);
+  return { c, r: 7 - r };
+}
+
+const PIPS = { 1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8] };
+
+function die(v, k) {
+  const on = PIPS[v] || [];
+  return `<span class="die" style="--k:${k}" aria-label="${v || '–'}">${Array.from({ length: 9 }, (_, i) => `<i class="${on.includes(i) ? 'is-on' : ''}"></i>`).join('')}</span>`;
+}
+
+function pawnStyle(n) {
+  const { c, r } = cell(n);
+  return `--c:${c};--r:${r}`;
+}
+
+function view(state, ctx) {
+  const cells = [];
+  for (let n = 0; n <= END; n++) {
+    const { c, r } = cell(n);
+    const goose = GEESE.includes(n);
+    const sp = active(state, n) ? SPECIAL[n] : null;
+    const kind = goose ? 'is-goose' : sp ? `sp sp-${n}` : '';
+    cells.push(`
+      <div class="goose__cell ${kind}" style="grid-column:${c + 1};grid-row:${r + 1};--h:${Math.round((n / END) * 300)}" title="${esc(goose ? `${n} · Goose — fly again` : sp ? `${n} · ${sp.name}` : String(n))}">
+        <span class="goose__n">${n || ''}</span>
+        ${goose ? '<span class="goose__ico">🪿</span>' : sp ? `<span class="goose__ico">${sp.ico}</span>` : ''}
+      </div>`);
+  }
+
+  const over = outcome(state).over;
+  const canRoll = ctx.myTurn && !over;
+  const n = (s) => ctx.names[s] || `Player ${s + 1}`;
+
+  return `
+    <div class="goose">
+      <div class="goose__board">
+        ${cells.join('')}
+        ${[0, 1].map((s) => `<span class="goose__pawn goose__pawn--${s}" style="${pawnStyle(state.pos[s])}" aria-label="${esc(n(s))} on ${state.pos[s]}"><i></i></span>`).join('')}
+      </div>
+
+      <div class="goose__panel">
+        <button class="goose__dice" type="button" data-roll ${canRoll ? '' : 'disabled'} aria-label="Roll the dice">
+          ${die(state.dice[0], 0)}${die(state.dice[1], 1)}
+          <span class="goose__roll">${over ? 'Finished' : canRoll ? (ctx.local ? `${esc(n(ctx.seat))}, roll!` : 'Roll the dice') : `${esc(n(state.turn))} to roll…`}</span>
+        </button>
+        <ol class="goose__log">
+          ${state.log
+            .map((l, i) => `<li class="goose__ev goose__ev--${l.seat}${i === 0 ? ' is-new' : ''}"><b>${esc(n(l.seat))}</b> rolled ${l.sum}${l.ev ? ` — ${esc(l.ev)}` : ''}</li>`)
+            .join('') || '<li class="goose__ev t-mute">Roll to set off from home 🏠</li>'}
+        </ol>
+      </div>
+    </div>`;
+}
+
+let animated = '';
+let timers = [];
+
+function bind(root, state, ctx, play) {
+  timers.forEach(clearTimeout);
+  timers = [];
+
+  const btn = root.querySelector('[data-roll]');
+  btn?.addEventListener('click', () => {
+    btn.classList.add('is-rolling');
+    play({ roll: true });
+  });
+
+  const last = state.last;
+  const key = `${state.gid}:${state.moves}`;
+  if (!last || animated === key) return;
+  animated = key;
+
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+
+  root.querySelector('.goose__dice')?.classList.add('is-tumbling');
+  const pawn = root.querySelector(`.goose__pawn--${last.seat}`);
+  const rival = root.querySelector(`.goose__pawn--${1 - last.seat}`);
+  if (!pawn) return;
+
+  const finalMine = pawn.getAttribute('style');
+  pawn.setAttribute('style', pawnStyle(last.from));
+  pawn.classList.add('is-moving');
+  let rivalFinal = null;
+  if (last.bump >= 0 && rival) {
+    rivalFinal = rival.getAttribute('style');
+    rival.setAttribute('style', pawnStyle(last.path[last.path.length - 1]));
+  }
+
+  const lead = 520;
+  last.path.forEach((sq, i) => {
+    timers.push(
+      setTimeout(() => {
+        if (!pawn.isConnected) return;
+        pawn.setAttribute('style', pawnStyle(sq));
+        pawn.classList.remove('is-hop');
+        void pawn.offsetWidth;
+        pawn.classList.add('is-hop');
+      }, lead + i * STEP)
+    );
+  });
+
+  timers.push(
+    setTimeout(() => {
+      if (!pawn.isConnected) return;
+      pawn.setAttribute('style', finalMine);
+      pawn.classList.remove('is-moving');
+      if (rival && rivalFinal) {
+        rival.setAttribute('style', rivalFinal);
+        rival.classList.add('is-bumped');
+      }
+    }, lead + last.path.length * STEP + 60)
+  );
+}
+
+function coach(state, ctx) {
+  if (outcome(state).over) return 'What a race. Again?';
+  const me = ctx.seat;
+  if (ctx.myTurn) {
+    const left = END - state.pos[me];
+    if (left <= 12 && left > 0) return state.finish === 'relaxed' ? `${left} to go — any roll that reaches 63 wins.` : `You need exactly ${left} to reach the garden.`;
+    return 'Tap the dice to roll.';
+  }
+  return state.skip[me] ? `You are resting for ${state.skip[me]} more turn${state.skip[me] > 1 ? 's' : ''}.` : 'Watch the other pawn go…';
+}
+return Object.freeze({ meta, create, turn, apply, outcome, auto, pace, ai, note, view, bind, coach });
+  })();
+
+  /* ===== js/arcade/games/eights.js ===== */
+  const __m33 = (function () {
+const { esc, rand, shuffle } = __m27;
+/**
+ * LifeFlow Arcade — Crazy Eights (Huit américain).
+ * Match the suit or rank of the top card. Eights are wild, twos make your rival draw,
+ * jacks skip their turn. First to empty their hand wins.
+ * Cards are numbers 0–51: rank = n % 13 (0 = A … 7 = 8 … 10 = J), suit = floor(n / 13).
+ */
+
+
+const RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+const SUITS = ['♠', '♥', '♦', '♣'];
+const SUIT_NAMES = ['Spades', 'Hearts', 'Diamonds', 'Clubs'];
+const R8 = 7;
+const R2 = 1;
+const RJ = 10;
+
+const rank = (c) => c % 13;
+const suitOf = (c) => Math.floor(c / 13);
+const red = (s) => s === 1 || s === 2;
+const top = (s) => s.pile[s.pile.length - 1];
+const hand = (s, seat) => s[`h${seat}`];
+
+const meta = {
+  id: 'eights',
+  group: ['cards', 'friends'],
+  title: 'Crazy Eights',
+  emoji: '♠️',
+  tagline: 'Huit américain — match, trick, and empty your hand.',
+  blurb: 'The café card classic. Follow suit or rank, play an 8 to change the suit, a 2 to make your rival draw, a jack to go again. Quick, cheeky and very replayable.',
+  minutes: '6 min',
+  tags: ['Cards', 'Classic'],
+  alternate: true,
+  levels: [
+    { id: 'gentle', label: 'Gentle', hint: 'Plays whatever fits.' },
+    { id: 'even', label: 'Even', hint: 'Keeps its eights for later.' },
+    { id: 'sharp', label: 'Sharp', hint: 'Times twos and jacks to hurt.' }
+  ],
+  settings: [
+    {
+      id: 'hand', label: 'Starting hand', def: 7,
+      options: [{ v: 5, label: '5 cards' }, { v: 7, label: '7 cards' }, { v: 9, label: '9 cards' }]
+    },
+    {
+      id: 'powers', label: 'Power cards', def: 'full',
+      options: [{ v: 'full', label: '8s, 2s & jacks' }, { v: 'plain', label: 'Only 8s are special' }]
+    }
+  ],
+  rules: [
+    'Each player starts with 7 cards (configurable). Play one card matching the suit or the rank of the top card.',
+    'Eights are wild — play one any time and pick the next suit.',
+    'A 2 makes your rival draw two, unless they answer with a 2 of their own (the penalty stacks).',
+    'A jack skips your rival — you play again.',
+    'Nothing to play? Draw one. If it fits you may play it, otherwise your turn ends.',
+    'First to empty their hand wins.',
+    'Settings: start with 5, 7 or 9 cards; switch off 2s and jacks for a calmer game.'
+  ]
+};
+
+function create(opts = {}) {
+  const size = [5, 7, 9].includes(opts.hand) ? opts.hand : 7;
+  const powers = opts.powers === 'plain' ? 'plain' : 'full';
+  const deck = shuffle(Array.from({ length: 52 }, (_, i) => i));
+  const h0 = deck.splice(0, size);
+  const h1 = deck.splice(0, size);
+  const k = deck.findIndex((c) => ![R8, R2, RJ].includes(rank(c)));
+  const start = deck.splice(k, 1)[0];
+  return { gid: Math.random().toString(36).slice(2, 9), h0, h1, deck, pile: [start], suit: suitOf(start), pending: 0, drew: false, turn: 0, last: null, moves: 0, powers };
+}
+
+function turn(state) {
+  return state.turn;
+}
+
+function playable(state, c) {
+  const r = rank(c);
+  if (state.pending > 0) return r === R2;
+  if (r === R8) return true;
+  return suitOf(c) === state.suit || r === rank(top(state));
+}
+
+function take(state, n) {
+  let deck = state.deck.slice();
+  let pile = state.pile.slice();
+  const got = [];
+  for (let i = 0; i < n; i++) {
+    if (!deck.length) {
+      if (pile.length <= 1) break;
+      deck = shuffle(pile.slice(0, -1));
+      pile = pile.slice(-1);
+    }
+    got.push(deck.pop());
+  }
+  return { deck, pile, got };
+}
+
+function apply(state, move) {
+  if (!move || outcome(state).over) return null;
+  const p = state.turn;
+  const key = `h${p}`;
+  const mine = hand(state, p);
+
+  if (move.play !== undefined) {
+    const c = move.play;
+    if (!Number.isInteger(c) || !mine.includes(c) || !playable(state, c)) return null;
+    const r = rank(c);
+    let suit = suitOf(c);
+    if (r === R8) {
+      if (![0, 1, 2, 3].includes(move.suit)) return null;
+      suit = move.suit;
+    }
+    const power = state.powers !== 'plain';
+    return {
+      ...state,
+      [key]: mine.filter((x) => x !== c),
+      pile: [...state.pile, c],
+      suit,
+      pending: power && r === R2 ? state.pending + 2 : 0,
+      drew: false,
+      turn: power && r === RJ ? p : 1 - p,
+      last: { seat: p, kind: 'play', card: c, suit },
+      moves: state.moves + 1
+    };
+  }
+
+  if (move.draw) {
+    if (state.drew) return null;
+    const n = state.pending > 0 ? state.pending : 1;
+    const { deck, pile, got } = take(state, n);
+    const nextHand = [...mine, ...got];
+    const fits = state.pending === 0 && got.length === 1 && playable({ ...state, pending: 0 }, got[0]);
+    return {
+      ...state,
+      [key]: nextHand,
+      deck,
+      pile,
+      pending: 0,
+      drew: fits,
+      turn: fits ? p : 1 - p,
+      last: { seat: p, kind: 'draw', got, penalty: state.pending },
+      moves: state.moves + 1
+    };
+  }
+
+  if (move.pass) {
+    if (!state.drew) return null;
+    return { ...state, drew: false, turn: 1 - p, last: { seat: p, kind: 'pass' }, moves: state.moves + 1 };
+  }
+
+  return null;
+}
+
+function outcome(state) {
+  if (!state.h0.length) return { over: true, winner: 0, draw: false };
+  if (!state.h1.length) return { over: true, winner: 1, draw: false };
+  if (state.moves > 600) {
+    const a = state.h0.length;
+    const b = state.h1.length;
+    return a === b ? { over: true, winner: null, draw: true } : { over: true, winner: a < b ? 0 : 1, draw: false };
+  }
+  return { over: false };
+}
+
+function auto() {
+  return null;
+}
+
+function pace() {
+  return 250;
+}
+
+function bestSuit(cards) {
+  const count = [0, 0, 0, 0];
+  cards.forEach((c) => { if (rank(c) !== R8) count[suitOf(c)] += 1; });
+  let best = 0;
+  for (let s = 1; s < 4; s++) if (count[s] > count[best]) best = s;
+  return count[best] ? best : rand(4);
+}
+
+function ai(state, seat, level = 'even') {
+  const mine = hand(state, seat);
+  const plays = mine.filter((c) => playable(state, c));
+  if (!plays.length) return state.drew ? { pass: true } : { draw: true };
+
+  let pick;
+  if (level === 'gentle') {
+    pick = plays[rand(plays.length)];
+  } else {
+    const rivalLeft = hand(state, 1 - seat).length;
+    const suitCount = [0, 0, 0, 0];
+    mine.forEach((c) => (suitCount[suitOf(c)] += 1));
+    const score = (c) => {
+      const r = rank(c);
+      let v = suitCount[suitOf(c)];
+      if (r === R8) v -= plays.length > 1 ? 12 : 0;
+      if (r === RJ) v += 3;
+      if (r === R2) v += level === 'sharp' && rivalLeft <= 3 ? 8 : 1;
+      if (level === 'sharp' && rivalLeft <= 2 && r === R8) v += 4;
+      return v + Math.random() * 0.5;
+    };
+    pick = plays.slice().sort((a, b) => score(b) - score(a))[0];
+  }
+  const move = { play: pick };
+  if (rank(pick) === R8) move.suit = bestSuit(mine.filter((c) => c !== pick));
+  return move;
+}
+
+function note(state, seat) {
+  const n = hand(state, seat).length;
+  return n === 1 ? 'Last card!' : `${n} cards`;
+}
+
+/* ------------------------------ view ------------------------------ */
+function face(c) {
+  const r = RANKS[rank(c)];
+  const s = SUITS[suitOf(c)];
+  const court = rank(c) >= RJ;
+  return `
+    <span class="pc__corner pc__corner--tl">${r}<i>${s}</i></span>
+    <span class="pc__mid${court ? ' pc__mid--court' : ''}${rank(c) === R8 ? ' pc__mid--wild' : ''}">${court ? `<b>${r}</b>` : ''}${s}</span>
+    <span class="pc__corner pc__corner--br">${r}<i>${s}</i></span>`;
+}
+
+function label(c) {
+  return `${RANKS[rank(c)]} of ${SUIT_NAMES[suitOf(c)]}`;
+}
+
+const tilt = (c, i) => (((c * 37 + i * 11) % 19) - 9);
+
+function view(state, ctx) {
+  const me = ctx.seat;
+  const opp = 1 - me;
+  const over = outcome(state).over;
+  const mine = hand(state, me)
+    .slice()
+    .sort((a, b) => suitOf(a) - suitOf(b) || rank(a) - rank(b));
+  const theirs = hand(state, opp).length;
+  const t = top(state);
+  const last = state.last;
+  const fresh = last && last.kind === 'draw' && last.seat === me ? last.got : [];
+  const myTurn = ctx.myTurn && !over;
+  const overlap = mine.length <= 6 ? -16 : Math.max(-46, -16 - (mine.length - 6) * 4);
+  const oppOverlap = theirs <= 6 ? -30 : Math.max(-44, -30 - (theirs - 6) * 2);
+
+  const under = state.pile.slice(-4, -1);
+  const enter = last && last.kind === 'play' ? (last.seat === me ? ' from-me' : ' from-opp') : '';
+
+  return `
+    <div class="c8${myTurn ? ' is-my-turn' : ''}">
+      <div class="c8__opp" aria-label="${esc(ctx.names[opp] || 'Rival')} has ${theirs} cards">
+        <div class="c8__fan" style="--n:${theirs};--ov:${oppOverlap}px">
+          ${Array.from({ length: theirs }, (_, i) => `<span class="pc pc--back" style="--i:${i}"></span>`).join('')}
+        </div>
+        ${last && last.seat === opp && last.kind === 'draw' ? `<span class="c8__said">drew ${last.got.length}</span>` : ''}
+        ${last && last.seat === opp && last.kind === 'pass' ? '<span class="c8__said">passed</span>' : ''}
+      </div>
+
+      <div class="c8__table">
+        <button class="c8__deck" type="button" data-draw ${myTurn && !state.drew ? '' : 'disabled'} aria-label="Draw from the deck">
+          <span class="pc pc--back c8__deck-card"></span>
+          <span class="pc pc--back c8__deck-card"></span>
+          <span class="pc pc--back c8__deck-card"></span>
+          <span class="c8__deck-label">${state.pending ? `Draw ${state.pending}` : 'Draw'}<small>${state.deck.length} left</small></span>
+        </button>
+
+        <div class="c8__pile">
+          ${under.map((c, i) => `<span class="pc pc--${red(suitOf(c)) ? 'red' : 'black'} pc--under" style="--rot:${tilt(c, i)}deg">${face(c)}</span>`).join('')}
+          <span class="pc pc--${red(suitOf(t)) ? 'red' : 'black'} pc--top${enter}" style="--rot:${tilt(t, 9)}deg" aria-label="Top card: ${label(t)}" data-top="${state.moves}">${face(t)}</span>
+        </div>
+
+        <div class="c8__suit c8__suit--${red(state.suit) ? 'red' : 'black'}${rank(t) === R8 ? ' is-wild' : ''}" title="Suit to follow: ${SUIT_NAMES[state.suit]}">
+          <span>${SUITS[state.suit]}</span><small>${rank(t) === R8 ? 'called' : 'follow'}</small>
+        </div>
+      </div>
+
+      ${state.pending ? `<p class="c8__alert">+${state.pending} waiting — ${myTurn ? 'answer with a 2 or draw' : 'your rival must answer'}</p>` : ''}
+
+      <div class="c8__hand" style="--n:${mine.length};--ov:${overlap}px">
+        ${mine
+          .map((c, i) => {
+            const ok = myTurn && playable(state, c);
+            return `<button class="pc pc--${red(suitOf(c)) ? 'red' : 'black'}${ok ? ' is-ok' : ''}${fresh.includes(c) ? ' is-new' : ''}${rank(c) === R8 ? ' is-wild' : ''}"
+                            type="button" data-card="${c}" style="--i:${i}" ${ok ? '' : 'disabled'} aria-label="${label(c)}">${face(c)}</button>`;
+          })
+          .join('')}
+      </div>
+
+      ${myTurn && state.drew ? '<div class="c8__actions"><button class="btn btn--ghost btn--sm" type="button" data-pass>Keep it and pass</button></div>' : ''}
+
+      <div class="c8__chooser" data-chooser hidden>
+        <div class="c8__chooser-card">
+          <p>Call the next suit</p>
+          <div class="c8__suits">
+            ${SUITS.map((s, k) => `<button type="button" class="c8__pick c8__pick--${red(k) ? 'red' : 'black'}" data-suit="${k}" style="--k:${k}" aria-label="${SUIT_NAMES[k]}">${s}</button>`).join('')}
+          </div>
+          <button class="btn btn--ghost btn--sm" type="button" data-unchoose>Cancel</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function bind(root, state, ctx, play) {
+  const chooser = root.querySelector('[data-chooser]');
+  let pending = null;
+
+  root.querySelectorAll('[data-card]').forEach((b) =>
+    b.addEventListener('click', () => {
+      const c = Number(b.dataset.card);
+      if (rank(c) === R8) {
+        pending = c;
+        chooser.hidden = false;
+        chooser.querySelector('[data-suit]')?.focus();
+        return;
+      }
+      b.classList.add('is-leaving');
+      play({ play: c });
+    })
+  );
+  root.querySelectorAll('[data-suit]').forEach((b) =>
+    b.addEventListener('click', () => {
+      if (pending == null) return;
+      chooser.hidden = true;
+      play({ play: pending, suit: Number(b.dataset.suit) });
+    })
+  );
+  root.querySelector('[data-unchoose]')?.addEventListener('click', () => {
+    pending = null;
+    chooser.hidden = true;
+  });
+  root.querySelector('[data-draw]')?.addEventListener('click', () => play({ draw: true }));
+  root.querySelector('[data-pass]')?.addEventListener('click', () => play({ pass: true }));
+}
+
+function coach(state, ctx) {
+  if (outcome(state).over) return 'Shuffle up and deal again?';
+  if (!ctx.myTurn) return 'Your rival is choosing a card…';
+  if (state.pending) return hand(state, ctx.seat).some((c) => rank(c) === R2) ? 'Stack a 2 to pass the penalty back — or take the cards.' : `No 2 in hand — draw ${state.pending}.`;
+  if (state.drew) return 'Your new card fits — play it, or keep it and pass.';
+  const any = hand(state, ctx.seat).some((c) => playable(state, c));
+  return any ? `Follow ${SUIT_NAMES[state.suit].toLowerCase()} or match the ${RANKS[rank(top(state))]}. Eights are wild.` : 'Nothing fits — draw from the deck.';
+}
+return Object.freeze({ meta, create, turn, playable, apply, outcome, auto, pace, ai, note, view, bind, coach });
+  })();
+
   /* ===== js/arcade/index.js ===== */
   const __m19 = (function () {
 const tictactoe = __m20;
@@ -7054,6 +9907,12 @@ const dame = __m22;
 const connect4 = __m23;
 const reversi = __m24;
 const dots = __m25;
+const truthdare = __m26;
+const insync = __m28;
+const knowme = __m30;
+const quiz = __m31;
+const goose = __m32;
+const eights = __m33;
 /**
  * LifeFlow Arcade — the game registry.
  *
@@ -7066,6 +9925,10 @@ const dots = __m25;
  *   ai(state, seat, level)  → the computer's move
  *   view(state, ctx)        → HTML for the board
  *   bind(root, state, ctx, play)
+ *
+ * Optional: note(state, seat), coach(state, ctx), summary(state, ctx) for a custom
+ * end line, pace(state) for extra computer thinking time. meta.local marks social
+ * games played by passing one device around (no computer), meta.group sorts the lobby.
  */
 
 
@@ -7074,7 +9937,13 @@ const dots = __m25;
 
 
 
-const GAMES = [tictactoe, connect4, reversi, dots, memory, dame];
+
+
+
+
+
+
+const GAMES = [truthdare, insync, knowme, quiz, eights, goose, tictactoe, connect4, reversi, dots, memory, dame];
 
 function gameById(id) {
   return GAMES.find((g) => g.meta.id === id) || null;
@@ -7478,7 +10347,7 @@ function gamesCard() {
         <h3 class="card__title">${icon('gamepad')} Take a break</h3>
         <button class="btn btn--xs btn--ghost" data-go="/games">Open ${icon('arrowRight')}</button>
       </div>
-      <p class="fs-sm t-dim games-card__sub">Ten quiet minutes. Play the computer, or send a friend a link.</p>
+      <p class="fs-sm t-dim games-card__sub">Party games, quizzes, cards and boards — alone, side by side, or online.</p>
       <div class="games-card__tiles">
         ${GAMES.map(
           (g, i) => `
@@ -7750,7 +10619,7 @@ return Object.freeze({ meta, render });
   })();
 
   /* ===== js/views/tasks.js ===== */
-  const __m26 = (function () {
+  const __m34 = (function () {
 const { esc, today, relativeDay, fmtTime, pct, debounce } = __m1;
 const { icon } = __m3;
 const { animateProgress, initSortable, initSwipe, toast, confetti, confirmDialog } = __m2;
@@ -8033,7 +10902,7 @@ return Object.freeze({ meta, render });
   })();
 
   /* ===== js/views/calendar.js ===== */
-  const __m27 = (function () {
+  const __m35 = (function () {
 const { esc, ymd, today, fromYmd, monthLabel, fmtTime, relativeDay } = __m1;
 const { icon } = __m3;
 const { toast, confirmDialog, initSwipe } = __m2;
@@ -8274,7 +11143,7 @@ return Object.freeze({ meta, render });
   })();
 
   /* ===== js/views/finance.js ===== */
-  const __m28 = (function () {
+  const __m36 = (function () {
 const { esc, fmtMoney, pct, ymd, relativeDay, countUp } = __m1;
 const { icon } = __m3;
 const { animateProgress, ring, sparkline, toast, confirmDialog, initSwipe } = __m2;
@@ -8568,7 +11437,7 @@ return Object.freeze({ meta, render });
   })();
 
   /* ===== js/views/purchases.js ===== */
-  const __m29 = (function () {
+  const __m37 = (function () {
 const { esc, fmtMoney, relativeDay, ymd, countUp, haptic } = __m1;
 const { icon } = __m3;
 const { toast, confetti, confirmDialog, initSwipe } = __m2;
@@ -8781,7 +11650,7 @@ return Object.freeze({ meta, render });
   })();
 
   /* ===== js/views/goals.js ===== */
-  const __m30 = (function () {
+  const __m38 = (function () {
 const { esc, relativeDay } = __m1;
 const { icon } = __m3;
 const { animateProgress, ring, toast, confetti } = __m2;
@@ -8926,7 +11795,7 @@ return Object.freeze({ meta, render });
   })();
 
   /* ===== js/views/habits.js ===== */
-  const __m31 = (function () {
+  const __m39 = (function () {
 const { esc, ymd, today, addDays, startOfWeek, pct, haptic } = __m1;
 const { icon } = __m3;
 const { animateProgress, ring, toast, confetti } = __m2;
@@ -9087,7 +11956,7 @@ return Object.freeze({ meta, render });
   })();
 
   /* ===== js/arcade/rooms.js ===== */
-  const __m33 = (function () {
+  const __m41 = (function () {
 const { db, doc, collection, setDoc, getDoc, updateDoc, deleteDoc, onSnapshot, getDocs, serverTimestamp, runTransaction } = __m7;
 const store = __m8;
 /**
@@ -9132,6 +12001,20 @@ function me() {
   };
 }
 
+/**
+ * Identifies this browser tab, so one account can sit on both sides of a table
+ * (a phone and a laptop, say) without being mistaken for the host twice.
+ */
+const TAB = (() => {
+  try {
+    let id = sessionStorage.getItem('lf:tab');
+    if (!id) { id = newCode(8); sessionStorage.setItem('lf:tab', id); }
+    return id;
+  } catch {
+    return newCode(8);
+  }
+})();
+
 /* ------------------------------ lifecycle ------------------------------ */
 async function createRoom({ gameId, level, state }) {
   const who = me();
@@ -9143,7 +12026,10 @@ async function createRoom({ gameId, level, state }) {
     gameId,
     level: level || 'even',
     hostUid: who.uid,
+    hostTab: TAB,
     guestUid: null,
+    guestTab: null,
+    guestJoin: null,
     host: { name: who.name },
     guest: null,
     state,
@@ -9170,17 +12056,21 @@ async function joinRoom(code) {
   if (!snap.exists()) throw new Error('That game could not be found — the link may have expired.');
 
   const data = snap.data();
-  if (data.hostUid === who.uid) return { seat: 0, data };
+  // The host's own tab (or an older room without tab ids) goes back to seat one.
+  if (data.hostUid === who.uid && (!data.hostTab || data.hostTab === TAB)) return { seat: 0, data };
   if (data.guestUid && data.guestUid !== who.uid) throw new Error('This game already has two players.');
 
-  if (data.guestUid !== who.uid) {
-    await updateDoc(roomRef(code), {
-      guestUid: who.uid,
-      guest: { name: who.name },
-      updatedAt: serverTimestamp()
-    });
-  }
-  return { seat: 1, data };
+  // Every arrival gets a fresh token — the host reopens the call when it changes.
+  const seated = {
+    guestUid: who.uid,
+    guestTab: TAB,
+    guestJoin: newCode(8),
+    guest: { name: who.name },
+    offer: null,
+    answer: null
+  };
+  await updateDoc(roomRef(code), { ...seated, updatedAt: serverTimestamp() });
+  return { seat: 1, data: { ...data, ...seated } };
 }
 
 function watchRoom(code, onChange, onGone) {
@@ -9282,6 +12172,8 @@ async function leaveRoom(code, seat) {
     } else {
       await updateDoc(roomRef(code), {
         guestUid: null,
+        guestTab: null,
+        guestJoin: null,
         guest: null,
         offer: null,
         answer: null,
@@ -9296,9 +12188,10 @@ return Object.freeze({ SEAT_KEYS, newCode, roomRef, iceRef, inviteLink, createRo
   })();
 
   /* ===== js/arcade/rtc.js ===== */
-  const __m34 = (function () {
-const { updateDoc, onSnapshot, addDoc } = __m7;
-const { roomRef, iceRef } = __m33;
+  const __m42 = (function () {
+const { updateDoc, onSnapshot, addDoc, getDocs, deleteDoc } = __m7;
+const { roomRef, iceRef, newCode } = __m41;
+const { RTC } = __m4;
 /**
  * LifeFlow Arcade — the video call.
  *
@@ -9307,16 +12200,43 @@ const { roomRef, iceRef } = __m33;
  * and video lanes reserved but empty; turning the camera or microphone on later
  * simply drops a track into the lane it already has, so there is no
  * renegotiation and no pause in the game.
+ *
+ * Every negotiation is a numbered "session" (`sid`). Offers, answers and ICE
+ * candidates carry it, so a reload, a rejoin or a reconnect never mixes up
+ * signals from an older connection. Candidates that arrive before the
+ * description they belong to are queued instead of dropped.
  */
 
 
 
-const ICE_CONFIG = {
-  iceServers: [
-    { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }
-  ],
-  iceCandidatePoolSize: 4
-};
+
+const STUN = { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] };
+
+function iceConfig() {
+  const extra = Array.isArray(RTC?.iceServers) ? RTC.iceServers.filter((s) => s && s.urls) : [];
+  return { iceServers: [STUN, ...extra], iceCandidatePoolSize: 2 };
+}
+
+/** Plain, Firestore-safe copy of a candidate. */
+function packCandidate(c, sid) {
+  return {
+    candidate: c.candidate || '',
+    sdpMid: c.sdpMid ?? null,
+    sdpMLineIndex: c.sdpMLineIndex ?? null,
+    usernameFragment: c.usernameFragment ?? null,
+    sid
+  };
+}
+
+function unpackCandidate(d) {
+  const init = { candidate: d.candidate || '' };
+  if (d.sdpMid != null) init.sdpMid = d.sdpMid;
+  if (d.sdpMLineIndex != null) init.sdpMLineIndex = d.sdpMLineIndex;
+  if (d.usernameFragment) init.usernameFragment = d.usernameFragment;
+  return init;
+}
+
+const AUTO_RETRIES = 3;
 
 const canCall = () =>
   typeof RTCPeerConnection !== 'undefined' &&
@@ -9330,12 +12250,18 @@ function createCall({ code, seat, onRemote, onLocal, onStatus, onError }) {
   const unsubs = [];
 
   let pc = null;
+  let sid = '';
   let local = null;
   let started = false;
   let closed = false;
-  let lastOffer = '';
   let cam = false;
   let mic = false;
+  let pending = []; // remote candidates waiting for their description: { sid, init }
+  let seenAnswer = '';
+  let lastKick; // undefined until the first room snapshot
+  let lastNegotiation = 0;
+  let retries = 0;
+  let watchdog = null;
 
   const status = (s) => onStatus?.(s);
 
@@ -9347,6 +12273,86 @@ function createCall({ code, seat, onRemote, onLocal, onStatus, onError }) {
       onRemote?.(remote);
     });
     onRemote?.(remote);
+  }
+
+  function clearRemote() {
+    remote.getTracks().forEach((t) => { try { remote.removeTrack(t); } catch { /* noop */ } });
+  }
+
+  function clearWatchdog() {
+    if (watchdog) clearTimeout(watchdog);
+    watchdog = null;
+  }
+
+  /** Ask for a fresh connection: the host renegotiates, the guest nudges the host. */
+  function recover(reason) {
+    if (closed) return;
+    if (host) {
+      if (Date.now() - lastNegotiation < 3000) return;
+      negotiate().catch((err) => console.warn('[arcade] renegotiate', reason, err));
+    } else {
+      updateDoc(roomRef(code), { rtcKick: newCode(8) }).catch(() => {});
+    }
+  }
+
+  function scheduleRecovery(conn, delay, reason) {
+    clearWatchdog();
+    if (retries >= AUTO_RETRIES) return;
+    watchdog = setTimeout(() => {
+      watchdog = null;
+      if (closed || pc !== conn || conn.connectionState === 'connected') return;
+      retries += 1;
+      recover(reason);
+    }, delay);
+  }
+
+  function buildPc() {
+    clearWatchdog();
+    if (pc) { try { pc.close(); } catch { /* noop */ } }
+    clearRemote();
+    onRemote?.(remote);
+    tx.audio = null;
+    tx.video = null;
+
+    const conn = new RTCPeerConnection(iceConfig());
+    const mySid = sid;
+    pc = conn;
+
+    conn.addEventListener('track', (ev) => {
+      if (pc !== conn) return;
+      if (ev.track) attachRemote(ev.track);
+    });
+
+    conn.addEventListener('icecandidate', (ev) => {
+      if (!ev.candidate || closed || pc !== conn) return;
+      addDoc(iceRef(code, seat), packCandidate(ev.candidate, mySid)).catch(() => {});
+    });
+
+    conn.addEventListener('connectionstatechange', () => {
+      if (pc !== conn) return;
+      const st = conn.connectionState;
+      status(st === 'new' ? 'connecting' : st);
+      if (st === 'connected') { retries = 0; clearWatchdog(); }
+      else if (st === 'failed') scheduleRecovery(conn, host ? 600 : 2500, 'failed');
+      else if (st === 'disconnected') scheduleRecovery(conn, 7000, 'disconnected');
+    });
+
+    // Never connected at all — try a fresh negotiation once in a while.
+    scheduleRecovery(conn, 25000, 'timeout');
+    status('connecting');
+    return conn;
+  }
+
+  async function addRemoteCandidate(init) {
+    try { await pc.addIceCandidate(new RTCIceCandidate(init)); } catch { /* stale or malformed */ }
+  }
+
+  /** Feed any queued candidates that belong to the current session. */
+  async function drain() {
+    if (!pc?.remoteDescription) return;
+    const mine = pending.filter((p) => p.sid === sid);
+    pending = pending.filter((p) => p.sid !== sid);
+    for (const p of mine) await addRemoteCandidate(p.init);
   }
 
   /** Push any tracks we already hold into the freshly negotiated senders. */
@@ -9365,97 +12371,127 @@ function createCall({ code, seat, onRemote, onLocal, onStatus, onError }) {
     started = true;
     status('connecting');
 
-    pc = new RTCPeerConnection(ICE_CONFIG);
-
-    pc.addEventListener('track', (ev) => {
-      if (ev.streams?.[0]) ev.streams[0].getTracks().forEach(attachRemote);
-      else if (ev.track) attachRemote(ev.track);
-    });
-
-    pc.addEventListener('icecandidate', (ev) => {
-      if (!ev.candidate || closed) return;
-      addDoc(iceRef(code, seat), ev.candidate.toJSON()).catch(() => {});
-    });
-
-    pc.addEventListener('connectionstatechange', () => {
-      if (!pc) return;
-      status(pc.connectionState);
-      if (pc.connectionState === 'failed') restartIce();
-    });
-
-    // The other side's candidates.
+    // The other side's candidates — queued until their description is in place.
     unsubs.push(
-      onSnapshot(iceRef(code, host ? 1 : 0), (snap) => {
-        snap.docChanges().forEach((change) => {
-          if (change.type !== 'added' || !pc) return;
-          pc.addIceCandidate(new RTCIceCandidate(change.doc.data())).catch(() => {});
-        });
-      })
+      onSnapshot(
+        iceRef(code, host ? 1 : 0),
+        (snap) => {
+          snap.docChanges().forEach((change) => {
+            if (change.type !== 'added') return;
+            const d = change.doc.data();
+            if (!d?.sid || !d.candidate) return; // stale signals from an older version
+            const init = unpackCandidate(d);
+            if (pc && d.sid === sid && pc.remoteDescription) addRemoteCandidate(init);
+            else if (!host || d.sid === sid) pending.push({ sid: d.sid, init });
+          });
+          if (pending.length > 300) pending = pending.slice(-300);
+        },
+        (err) => console.warn('[arcade] ice', err)
+      )
     );
 
-    try {
-      if (host) await offer();
-      else await listenForOffer();
-    } catch (err) {
-      console.warn('[arcade] call', err);
-      onError?.(err);
-      status('failed');
+    // Offers, answers and reconnect requests travel on the room document.
+    unsubs.push(onSnapshot(roomRef(code), (snap) => onRoom(snap.data()), (err) => console.warn('[arcade] signal', err)));
+
+    if (host) {
+      try { await negotiate(); }
+      catch (err) {
+        console.warn('[arcade] call', err);
+        onError?.(err);
+        status('failed');
+      }
     }
   }
 
-  async function offer() {
+  function onRoom(data) {
+    if (!data || closed) return;
+
+    if (host) {
+      const a = data.answer;
+      if (a?.sdp && a.sid === sid && a.sdp !== seenAnswer && pc?.signalingState === 'have-local-offer') {
+        seenAnswer = a.sdp;
+        const mySid = sid;
+        pc.setRemoteDescription({ type: 'answer', sdp: a.sdp })
+          .then(() => { if (sid === mySid) return drain(); })
+          .catch((err) => console.warn('[arcade] answer', err));
+      }
+      // The guest pressed "Reconnect" (or its side gave up).
+      const kick = data.rtcKick || '';
+      if (lastKick === undefined) lastKick = kick;
+      else if (kick !== lastKick) {
+        lastKick = kick;
+        recover('kick');
+      }
+      return;
+    }
+
+    const o = data.offer;
+    if (o?.sdp && o.sid && o.sid !== sid) answerOffer(o);
+  }
+
+  /** Host: a brand-new connection, reusing whatever camera/mic is already on. */
+  async function negotiate() {
+    if (!host || closed) return;
+    lastNegotiation = Date.now();
+    sid = newCode(10);
+    const mySid = sid;
+    seenAnswer = '';
+    pending = [];
+
+    const conn = buildPc();
     // Reserve both lanes up front so tracks can be swapped in later.
-    tx.audio = pc.addTransceiver('audio', { direction: 'sendrecv' });
-    tx.video = pc.addTransceiver('video', { direction: 'sendrecv' });
+    tx.audio = conn.addTransceiver('audio', { direction: 'sendrecv' });
+    tx.video = conn.addTransceiver('video', { direction: 'sendrecv' });
     await flushSenders();
 
-    const desc = await pc.createOffer();
-    await pc.setLocalDescription(desc);
-    await updateDoc(roomRef(code), { offer: { type: desc.type, sdp: desc.sdp }, answer: null });
-
-    unsubs.push(
-      onSnapshot(roomRef(code), async (snap) => {
-        const answer = snap.data()?.answer;
-        if (!answer || !pc || pc.currentRemoteDescription || pc.signalingState === 'stable') return;
-        try {
-          await pc.setRemoteDescription(new RTCSessionDescription(answer));
-        } catch (err) {
-          console.warn('[arcade] answer', err);
-        }
-      })
-    );
+    const desc = await conn.createOffer();
+    if (sid !== mySid || closed) return;
+    await conn.setLocalDescription(desc);
+    await updateDoc(roomRef(code), { offer: { type: desc.type, sdp: desc.sdp, sid: mySid }, answer: null });
+    sweep(mySid);
   }
 
-  async function listenForOffer() {
-    unsubs.push(
-      onSnapshot(roomRef(code), async (snap) => {
-        const data = snap.data();
-        if (!data?.offer || !pc || data.offer.sdp === lastOffer) return;
-        lastOffer = data.offer.sdp;
-        try {
-          await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
-          pc.getTransceivers().forEach((t) => { t.direction = 'sendrecv'; });
-          tx.audio = pc.getTransceivers().find((t) => t.receiver?.track?.kind === 'audio') || tx.audio;
-          tx.video = pc.getTransceivers().find((t) => t.receiver?.track?.kind === 'video') || tx.video;
-          await flushSenders();
+  /** Guest: answer the host's latest offer on a fresh connection. */
+  async function answerOffer(o) {
+    sid = o.sid;
+    const mySid = sid;
+    pending = pending.filter((p) => p.sid === mySid);
 
-          const desc = await pc.createAnswer();
-          await pc.setLocalDescription(desc);
-          await updateDoc(roomRef(code), { answer: { type: desc.type, sdp: desc.sdp } });
-        } catch (err) {
-          console.warn('[arcade] offer', err);
-        }
-      })
-    );
-  }
-
-  async function restartIce() {
-    if (!host || !pc || closed) return;
+    const conn = buildPc();
     try {
-      const desc = await pc.createOffer({ iceRestart: true });
-      await pc.setLocalDescription(desc);
-      await updateDoc(roomRef(code), { offer: { type: desc.type, sdp: desc.sdp }, answer: null });
-    } catch { /* leave it to the reconnect button */ }
+      await conn.setRemoteDescription({ type: 'offer', sdp: o.sdp });
+      if (sid !== mySid || closed) return;
+      conn.getTransceivers().forEach((t) => { t.direction = 'sendrecv'; });
+      tx.audio = conn.getTransceivers().find((t) => t.receiver?.track?.kind === 'audio') || null;
+      tx.video = conn.getTransceivers().find((t) => t.receiver?.track?.kind === 'video') || null;
+      await flushSenders();
+      await drain();
+
+      const desc = await conn.createAnswer();
+      if (sid !== mySid || closed) return;
+      await conn.setLocalDescription(desc);
+      await updateDoc(roomRef(code), { answer: { type: desc.type, sdp: desc.sdp, sid: mySid } });
+    } catch (err) {
+      console.warn('[arcade] offer', err);
+      if (sid === mySid) status('failed');
+    }
+  }
+
+  /** Best effort: clear candidates left over from older sessions. */
+  async function sweep(keepSid) {
+    for (const lane of [0, 1]) {
+      try {
+        const snap = await getDocs(iceRef(code, lane));
+        await Promise.all(snap.docs.filter((d) => d.data()?.sid !== keepSid).map((d) => deleteDoc(d.ref)));
+      } catch { /* not important */ }
+    }
+  }
+
+  /** Manual "Reconnect" — resets the retry budget too. */
+  function reconnect() {
+    retries = 0;
+    lastNegotiation = 0;
+    recover('manual');
   }
 
   /* ------------------------------ devices ------------------------------ */
@@ -9512,10 +12548,11 @@ function createCall({ code, seat, onRemote, onLocal, onStatus, onError }) {
 
   function close() {
     closed = true;
+    clearWatchdog();
     unsubs.forEach((u) => { try { u(); } catch { /* already off */ } });
     unsubs.length = 0;
     local?.getTracks().forEach((t) => t.stop());
-    remote.getTracks().forEach((t) => { try { remote.removeTrack(t); } catch { /* noop */ } });
+    clearRemote();
     local = null;
     try { pc?.close(); } catch { /* noop */ }
     pc = null;
@@ -9527,7 +12564,7 @@ function createCall({ code, seat, onRemote, onLocal, onStatus, onError }) {
     close,
     setCam,
     setMic,
-    restartIce,
+    reconnect,
     get cam() { return cam; },
     get mic() { return mic; },
     get localStream() { return local; },
@@ -9538,15 +12575,15 @@ return Object.freeze({ canCall, createCall });
   })();
 
   /* ===== js/views/games.js ===== */
-  const __m32 = (function () {
+  const __m40 = (function () {
 const { esc, haptic, initials } = __m1;
 const { icon } = __m3;
 const { toast, modal, confetti } = __m2;
 const store = __m8;
 const { navigate, currentQuery } = __m6;
 const { GAMES, gameById } = __m19;
-const rooms = __m33;
-const { createCall, canCall } = __m34;
+const rooms = __m41;
+const { createCall, canCall } = __m42;
 /**
  * LifeFlow — Games.
  * A small arcade: play the computer, or send someone a link and play them
@@ -9570,6 +12607,35 @@ let session = null;
 let rootEl = null;
 let lastQuery = '';
 const levels = {}; // remembered difficulty per game
+
+/* Per-game settings, remembered on this device. */
+const SETTINGS_KEY = 'lf:game-settings';
+let chosen = loadSettings();
+
+function loadSettings() {
+  try {
+    const v = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
+    return v && typeof v === 'object' ? v : {};
+  } catch {
+    return {};
+  }
+}
+
+/** The saved choices for a game, each checked against the options it offers. */
+function settingsFor(game) {
+  const saved = chosen[game.meta.id];
+  const out = {};
+  for (const opt of game.meta.settings || []) {
+    const v = saved && typeof saved === 'object' ? saved[opt.id] : undefined;
+    out[opt.id] = opt.options.some((o) => o.v === v) ? v : opt.def;
+  }
+  return out;
+}
+
+function saveSettings(gameId, values) {
+  chosen = { ...chosen, [gameId]: values };
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(chosen)); } catch { /* private mode */ }
+}
 
 const q = (sel) => rootEl?.querySelector(sel);
 const myName = () =>
@@ -9626,6 +12692,8 @@ function readQuery() {
   const params = currentQuery();
   const stamp = `${params.room || ''}|${params.play || ''}`;
   if (!stamp || stamp === '|' || stamp === lastQuery) return;
+  // Signed-in state may still be arriving — try again on the next paint.
+  if (params.room && !store.state.uid) return;
   lastQuery = stamp;
   if (params.room) joinByCode(params.room);
   else if (params.play && gameById(params.play)) startSolo(params.play);
@@ -9634,21 +12702,42 @@ function readQuery() {
 /* =========================================================
    Lobby
    ========================================================= */
+const SHELVES = [
+  { id: 'all', label: 'All', emoji: '✨' },
+  { id: 'couple', label: 'Couples', emoji: '💞' },
+  { id: 'friends', label: 'Friends & party', emoji: '🎉' },
+  { id: 'board', label: 'Board', emoji: '🎲' },
+  { id: 'cards', label: 'Cards', emoji: '🃏' },
+  { id: 'brain', label: 'Quiz & brain', emoji: '🧠' }
+];
+let shelf = 'all';
+
+const onShelf = (g) => shelf === 'all' || (g.meta.group || []).includes(shelf);
+
 function lobbyHtml() {
   return `
     <div class="page arcade-lobby" data-arcade-root>
       <section class="card arcade-hero">
         <div class="grow">
-          <span class="eyebrow">A short break</span>
+          <span class="eyebrow">Play together</span>
           <h2>Games</h2>
-          <p class="fs-sm t-dim">Take ten minutes off. Play against the house, or send a link to someone you like.</p>
+          <p class="fs-sm t-dim">Couples, friends, cards, board games and quizzes. Play the house, pass the phone around, or invite someone online — with chat, voice and video.</p>
         </div>
         <span class="arcade-hero__art" aria-hidden="true">
-          <i>✳️</i><i>🔴</i><i>⚫</i><i>🟦</i><i>🃏</i>
+          <i>🎭</i><i>💞</i><i>🧠</i><i>🪿</i><i>♠️</i>
         </span>
       </section>
 
-      <div class="arcade-grid">
+      <nav class="arcade-shelves" role="tablist" aria-label="Game types">
+        ${SHELVES.map(
+          (sh) => `<button class="arcade-shelf" role="tab" type="button" data-shelf="${sh.id}" aria-selected="${sh.id === shelf}">
+                     <span aria-hidden="true">${sh.emoji}</span> ${esc(sh.label)}
+                     <b>${sh.id === 'all' ? GAMES.length : GAMES.filter((g) => (g.meta.group || []).includes(sh.id)).length}</b>
+                   </button>`
+        ).join('')}
+      </nav>
+
+      <div class="arcade-grid" data-grid>
         ${GAMES.map((g, i) => gameCard(g, i)).join('')}
       </div>
 
@@ -9670,7 +12759,7 @@ function gameCard(game, i) {
   const m = game.meta;
   const level = levels[m.id] || 'even';
   return `
-    <article class="gcard" style="--i:${i}" data-game="${m.id}">
+    <article class="gcard${m.local ? ' gcard--social' : ''}" style="--i:${i}" data-game="${m.id}"${onShelf(game) ? '' : ' hidden'}>
       <div class="gcard__art gcard__art--${m.id}">
         <span class="gcard__glow"></span>
         <span class="gcard__emoji">${m.emoji}</span>
@@ -9683,6 +12772,7 @@ function gameCard(game, i) {
           <span class="chip">${icon('clock')} ${esc(m.minutes)}</span>
           ${m.tags.map((t) => `<span class="chip">${esc(t)}</span>`).join('')}
         </div>
+        ${m.levels.length ? `
         <div class="segmented segmented--tiny" role="tablist" aria-label="Difficulty">
           ${m.levels
             .map(
@@ -9691,16 +12781,38 @@ function gameCard(game, i) {
                          data-level="${l.id}" data-for="${m.id}" title="${esc(l.hint)}">${esc(l.label)}</button>`
             )
             .join('')}
-        </div>
+        </div>` : ''}
         <div class="gcard__actions">
-          <button class="btn btn--primary" type="button" data-solo="${m.id}">${icon('bot')} Play the computer</button>
-          <button class="btn btn--ghost" type="button" data-invite="${m.id}">${icon('users')} Invite a friend</button>
+          ${m.local
+            ? `<button class="btn btn--primary" type="button" data-solo="${m.id}">${icon('users')} Play here together</button>`
+            : `<button class="btn btn--primary" type="button" data-solo="${m.id}">${icon('bot')} Play the computer</button>`}
+          <button class="btn btn--ghost" type="button" data-invite="${m.id}">${icon('link')} Play online</button>
+          ${m.settings?.length ? `<button class="iconbtn gcard__cog" type="button" data-settings="${m.id}" aria-label="${esc(m.title)} settings" title="Settings">${icon('settings')}</button>` : ''}
         </div>
       </div>
     </article>`;
 }
 
 function wireLobby() {
+  rootEl.querySelectorAll('[data-shelf]').forEach((b) =>
+    b.addEventListener('click', () => {
+      shelf = b.dataset.shelf;
+      rootEl.querySelectorAll('[data-shelf]').forEach((s) => s.setAttribute('aria-selected', String(s === b)));
+      let n = 0;
+      rootEl.querySelectorAll('.gcard').forEach((card) => {
+        const show = onShelf(gameById(card.dataset.game));
+        card.hidden = !show;
+        if (show) {
+          card.style.setProperty('--i', String(n++));
+          card.classList.remove('is-shuffled');
+          void card.offsetWidth;
+          card.classList.add('is-shuffled');
+        }
+      });
+      haptic();
+    })
+  );
+
   rootEl.querySelectorAll('[data-level]').forEach((b) =>
     b.addEventListener('click', () => {
       levels[b.dataset.for] = b.dataset.level;
@@ -9715,6 +12827,13 @@ function wireLobby() {
 
   rootEl.querySelectorAll('[data-invite]').forEach((b) =>
     b.addEventListener('click', () => host(b.dataset.invite, b))
+  );
+
+  rootEl.querySelectorAll('[data-settings]').forEach((b) =>
+    b.addEventListener('click', () => {
+      const game = gameById(b.dataset.settings);
+      if (game) showSettings(game, false);
+    })
   );
 
   const form = q('[data-join-form]');
@@ -9740,13 +12859,15 @@ function startSolo(gameId) {
     level: levels[gameId] || 'even',
     seat: 0,
     round: 0,
-    names: [myName(), computerName(game, levels[gameId] || 'even')],
-    state: game.create(),
+    names: [myName(), game.meta.local ? partnerName : computerName(game, levels[gameId] || 'even')],
+    state: game.create(settingsFor(game)),
     timers: []
   };
   repaint();
   tick();
 }
+
+let partnerName = 'Player 2';
 
 function computerName(game, level) {
   const l = game.meta.levels.find((x) => x.id === level);
@@ -9761,13 +12882,13 @@ async function host(gameId, button) {
   button?.classList.add('is-loading');
   try {
     const level = levels[gameId] || 'even';
-    const state = game.create();
+    const state = game.create(settingsFor(game));
     const code = await rooms.createRoom({ gameId, level, state });
     openRoom({ code, game, seat: 0, state, level });
     showInvite(code, true);
   } catch (err) {
     console.warn('[arcade] host', err);
-    toast(err.message || 'Could not open the room.', 'error');
+    toast(roomError(err, 'Could not open the room.'), 'error', 6000);
   } finally {
     button?.classList.remove('is-loading');
   }
@@ -9786,9 +12907,18 @@ async function joinByCode(rawCode) {
     toast(seat === 1 ? 'You are in — good luck.' : 'Back at your table.', 'success');
   } catch (err) {
     console.warn('[arcade] join', err);
-    toast(err.message || 'Could not join that game.', 'error');
+    toast(roomError(err, 'Could not join that game.'), 'error', 6000);
     navigate('/games', { replace: true });
   }
+}
+
+/** Turn Firestore failures into something a player can act on. */
+function roomError(err, fallback) {
+  if (err?.code === 'permission-denied') {
+    return 'Online play is blocked by the database rules. Publish firestore.rules (firebase deploy --only firestore:rules).';
+  }
+  if (err?.code === 'unavailable') return 'You seem to be offline. Check the connection and try again.';
+  return err?.message || fallback;
 }
 
 function openRoom({ code, game, seat, state, level, room }) {
@@ -9843,8 +12973,15 @@ function onRoomChange(data) {
   syncDock();
   paintChat(data.chat || []);
 
-  // Both seated: open the line.
-  if (data.guestUid && !s.call) startCall();
+  // Both seated: open the line. A new arrival (or a rejoin after a reload)
+  // gets a brand-new connection from the host.
+  const join = data.guestUid ? data.guestJoin || data.guestUid : '';
+  if (join) {
+    if (!s.call) startCall();
+    else if (s.seat === 0 && join !== s.joinSeen) s.call.reconnect();
+    s.joinSeen = join;
+  }
+
   if (data.guestUid && !wasSeated && s.seat === 0) toast(`${data.guest?.name || 'Your friend'} joined.`, 'success');
   if (!data.guestUid && wasSeated && s.seat === 0) toast('Your friend stepped away.', 'info');
 
@@ -9854,15 +12991,15 @@ function onRoomChange(data) {
     const round = (data.round || 0) + 1;
     s.dealing = true;
     rooms
-      .restart(s.code, freshState(s.game, round), (data.seq || 0) + 1, round)
+      .restart(s.code, freshState(s.game, round, s.state), (data.seq || 0) + 1, round)
       .catch(() => {})
       .finally(() => { if (session === s) s.dealing = false; });
   }
 }
 
-function onRoomGone() {
+function onRoomGone(err) {
   if (!session || session.mode !== 'remote') return;
-  toast('The game was closed.', 'info');
+  toast(err ? roomError(err, 'Lost the connection to the game.') : 'The game was closed.', err ? 'error' : 'info', err ? 6000 : 3000);
   const s = session;
   teardown({ leaveTable: false });
   if (s.seat === 1) navigate('/games', { replace: true });
@@ -9876,12 +13013,19 @@ function bothSeated() {
   return session.mode === 'solo' || Boolean(session.room?.guestUid);
 }
 
+/** Social games played by passing one device around — whoever's turn it is holds it. */
+function isLocal() {
+  return session?.mode === 'solo' && Boolean(session.game.meta.local);
+}
+
 function context() {
   const s = session;
   const out = s.game.outcome(s.state);
+  const local = isLocal();
   return {
-    seat: s.seat,
-    myTurn: !out.over && bothSeated() && s.game.turn(s.state) === s.seat,
+    seat: local ? s.game.turn(s.state) : s.seat,
+    myTurn: !out.over && bothSeated() && (local || s.game.turn(s.state) === s.seat),
+    local,
     over: out.over,
     names: s.names,
     mode: s.mode,
@@ -9894,7 +13038,7 @@ function context() {
 function play(move) {
   const s = session;
   if (!s || s.game.outcome(s.state).over) return;
-  if (!bothSeated() || s.game.turn(s.state) !== s.seat) return;
+  if (!bothSeated() || (!isLocal() && s.game.turn(s.state) !== s.seat)) return;
   haptic();
   commit(move);
 }
@@ -9916,7 +13060,7 @@ function commit(move) {
   if (s.mode === 'remote') {
     rooms.pushState(s.code, { state: next, outcome: out.over ? out : null, seq: s.seq }).catch((err) => {
       console.warn('[arcade] push', err);
-      toast('That move did not reach your friend.', 'error');
+      toast(err?.code === 'permission-denied' ? roomError(err) : 'That move did not reach your friend.', 'error');
     });
   }
 
@@ -9943,13 +13087,13 @@ function tick() {
     return;
   }
 
-  if (s.mode === 'solo' && seat !== s.seat) {
+  if (s.mode === 'solo' && !isLocal() && seat !== s.seat) {
     s.timers.push(
       setTimeout(() => {
         if (!session || session !== s) return;
         const move = s.game.ai(s.state, seat, s.level);
         if (move) commit(move);
-      }, 420 + Math.random() * 520)
+      }, 420 + Math.random() * 520 + (s.game.pace?.(s.state) || 0))
     );
   }
 }
@@ -9963,11 +13107,17 @@ function finish(out) {
   paintStatus();
   paintRail();
 
-  if (out.winner === s.seat) { confetti(30); haptic(); }
+  if (out.celebrate || (out.winner === s.seat && !isLocal()) || (isLocal() && out.winner != null)) {
+    confetti(30);
+    haptic();
+  }
 }
 
-function freshState(game, round) {
-  const st = game.create();
+/** A new game with the saved settings, keeping the decks the players picked last time. */
+function freshState(game, round, prev) {
+  const opts = settingsFor(game);
+  if (Array.isArray(prev?.cats)) opts.cats = prev.cats;
+  const st = game.create(opts);
   if (game.meta.alternate !== false) st.turn = round % 2;
   return st;
 }
@@ -9981,7 +13131,7 @@ function newRound() {
     return;
   }
   s.round += 1;
-  s.state = freshState(s.game, s.round);
+  s.state = freshState(s.game, s.round, s.state);
   s.seq = (s.seq || 0) + 1;
   s.finishedAt = null;
   paintBoard();
@@ -10006,11 +13156,18 @@ function tableHtml() {
           <span class="arcade__emoji">${m.emoji}</span>
           <div class="grow">
             <h1 class="arcade__title">${esc(m.title)}</h1>
-            <p class="arcade__mode">${remote ? `${icon('users')} Playing a friend` : `${icon('bot')} ${esc(s.names[1])}`}</p>
+            <p class="arcade__mode">${
+              remote
+                ? `${icon('users')} Playing online`
+                : isLocal()
+                ? `${icon('users')} On this device — pass it around`
+                : `${icon('bot')} ${esc(s.names[1])}`
+            }</p>
           </div>
         </div>
         <div class="arcade__tools">
           ${remote ? `<button class="btn btn--ghost btn--sm" type="button" data-share>${icon('link')} Invite</button>` : ''}
+          ${m.settings?.length && (!remote || s.seat === 0) ? `<button class="iconbtn" type="button" data-table-settings aria-label="Game settings" title="Settings">${icon('settings')}</button>` : ''}
           <button class="iconbtn" type="button" data-rules aria-label="How to play">${icon('info')}</button>
         </div>
       </header>
@@ -10018,7 +13175,7 @@ function tableHtml() {
       <div class="arcade__layout">
         <section class="arcade__stage">
           <div class="arcade-rail" data-rail>${railHtml()}</div>
-          <div class="arcade-board" data-board></div>
+          <div class="arcade-board arcade-board--${m.id}" data-board></div>
           <div class="arcade-status" data-status>${statusHtml()}</div>
         </section>
 
@@ -10041,7 +13198,11 @@ function railHtml() {
   const active = out.over ? -1 : s.game.turn(s.state);
 
   const seatCard = (seat) => {
-    const name = seat === s.seat ? `${s.names[seat] || myName()} (you)` : s.names[seat] || 'Waiting…';
+    const name = isLocal()
+      ? s.names[seat] || `Player ${seat + 1}`
+      : seat === s.seat
+      ? `${s.names[seat] || myName()} (you)`
+      : s.names[seat] || 'Waiting…';
     const empty = s.mode === 'remote' && seat === 1 && !s.room?.guestUid;
     const won = out.over && out.winner === seat;
     return `
@@ -10063,6 +13224,7 @@ function seatNote(seat, empty, active) {
   if (empty) return 'Empty seat';
   const extra = s.game.note?.(s.state, seat);
   if (extra) return esc(extra);
+  if (isLocal()) return active === seat ? 'Your turn' : 'Waiting';
   if (s.mode === 'solo' && seat === 1) return 'Computer';
   if (active === seat) return seat === s.seat ? 'Your move' : 'Thinking…';
   return 'Waiting';
@@ -10080,11 +13242,18 @@ function statusHtml() {
     tone = ' is-waiting';
   } else if (out.over) {
     tone = ' is-over';
-    line = out.draw
+    const custom = s.game.summary?.(s.state, context());
+    line = custom
+      ? esc(custom)
+      : out.draw
       ? 'A draw — evenly matched.'
+      : isLocal()
+      ? `${esc(s.names[out.winner] || 'Someone')} wins. Nicely done.`
       : out.winner === s.seat
       ? 'You win. Nicely done.'
       : `${esc(s.names[out.winner] || 'Your rival')} takes it.`;
+  } else if (isLocal()) {
+    line = `${esc(s.names[s.game.turn(s.state)] || 'Next player')}, your turn.`;
   } else if (s.game.turn(s.state) === s.seat) {
     line = 'Your move.';
   } else {
@@ -10108,6 +13277,26 @@ function statusHtml() {
 
 function soloPanelHtml() {
   const s = session;
+  if (isLocal()) {
+    return `
+    <section class="card arcade-solo">
+      <h3 class="card__title">${icon('users')} Who's with you?</h3>
+      <label class="arcade-solo__name">
+        <span class="fs-xs t-mute">Player 2</span>
+        <input class="input" data-p2name maxlength="24" value="${esc(s.names[1])}" placeholder="Their name" autocomplete="off" />
+      </label>
+      <p class="fs-sm t-dim">One phone, two players — hand it over when the screen says so.</p>
+      <button class="btn btn--soft btn--block" type="button" data-invite-here>${icon('link')} Play online instead</button>
+    </section>`;
+  }
+  if (!s.game.meta.levels.length) {
+    return `
+    <section class="card arcade-solo">
+      <h3 class="card__title">${icon('bot')} Your opponent</h3>
+      <p class="fs-sm t-dim">The house plays fair — the dice decide the rest.</p>
+      <button class="btn btn--soft btn--block" type="button" data-invite-here>${icon('users')} Play a friend instead</button>
+    </section>`;
+  }
   return `
     <section class="card arcade-solo">
       <h3 class="card__title">${icon('bot')} Your opponent</h3>
@@ -10163,7 +13352,12 @@ function dockHtml() {
           <span class="vbtn__on">${icon('mic')}</span><span class="vbtn__off">${icon('micOff')}</span>
           <span class="vbtn__label">Mic</span>
         </button>
+        <button class="vbtn" type="button" data-recall ${supported ? '' : 'disabled'} title="Reconnect voice &amp; video">
+          <span class="vbtn__on">${icon('refresh')}</span><span class="vbtn__off">${icon('refresh')}</span>
+          <span class="vbtn__label">Reconnect</span>
+        </button>
       </div>
+      <button class="btn btn--primary btn--block vdock__sound" type="button" data-sound hidden>${icon('mic')} Tap to hear your friend</button>
       <p class="vdock__note fs-xs t-mute">Mic alone is a voice call; add the camera for video. Switch either whenever you like — the game keeps running.</p>
     </section>`;
 }
@@ -10292,9 +13486,12 @@ function wireTable() {
   const table = q('[data-arcade-root]');
   table?.addEventListener('click', (e) => {
     const t = e.target;
+    // Any tap counts as permission to play the friend's audio, if the browser held it back.
+    if (session?.mode === 'remote' && session.soundBlocked) playRemote();
     if (t.closest('[data-exit]')) { leave(); return; }
     if (t.closest('[data-again]')) { newRound(); return; }
     if (t.closest('[data-rules]')) { showRules(); return; }
+    if (t.closest('[data-table-settings]')) { showSettings(session.game, true); return; }
     if (t.closest('[data-share]')) { showInvite(session.code, false); return; }
     if (t.closest('[data-invite-here]')) { host(session.game.meta.id); return; }
 
@@ -10312,6 +13509,8 @@ function wireTable() {
 
     if (t.closest('[data-cam]')) { toggleDevice('cam'); return; }
     if (t.closest('[data-mic]')) { toggleDevice('mic'); return; }
+    if (t.closest('[data-recall]')) { recall(); return; }
+    if (t.closest('[data-sound]')) { playRemote(); return; }
 
     const react = t.closest('[data-react]');
     if (react) { say(react.dataset.react, 'react'); return; }
@@ -10320,6 +13519,14 @@ function wireTable() {
   });
 
   const chatForm = q('[data-chat-form]');
+  table?.addEventListener('input', (e) => {
+    if (!e.target.matches('[data-p2name]') || !session) return;
+    partnerName = e.target.value.trim().slice(0, 24) || 'Player 2';
+    session.names[1] = partnerName;
+    paintRail();
+    paintStatus();
+    paintBoard();
+  });
   chatForm?.addEventListener('submit', (e) => {
     e.preventDefault();
     const text = chatForm.msg.value.trim();
@@ -10412,34 +13619,162 @@ function showRules() {
   });
 }
 
+/** Pick the game's options. At the table the host (or a solo player) can restart with them. */
+function showSettings(game, atTable) {
+  const m = game.meta;
+  const draft = settingsFor(game);
+  const s = session;
+  const canRestart = atTable && s && s.game === game && (s.mode === 'solo' || s.seat === 0);
+
+  modal({
+    title: `${m.emoji} ${m.title} — settings`,
+    body: `
+      <div class="gset">
+        ${m.settings
+          .map(
+            (opt) => `
+          <fieldset class="gset__group">
+            <legend class="gset__label">${esc(opt.label)}</legend>
+            <div class="gset__opts" role="radiogroup" aria-label="${esc(opt.label)}">
+              ${opt.options
+                .map(
+                  (o, k) =>
+                    `<button class="gset__opt" type="button" role="radio" data-set="${esc(opt.id)}" data-k="${k}" aria-checked="${o.v === draft[opt.id]}">${esc(o.label)}</button>`
+                )
+                .join('')}
+            </div>
+          </fieldset>`
+          )
+          .join('')}
+      </div>
+      <p class="fs-sm t-dim">${
+        atTable
+          ? canRestart
+            ? (s.mode === 'remote' ? 'Both players share these rules. Restart to use them now, or save them for the next game.' : 'Restart to use them now, or save them for the next game.')
+            : 'They apply from the next game.'
+          : 'Saved on this device and used every time you start this game.'
+      }</p>`,
+    footer: `
+      <button class="btn btn--ghost" type="button" data-save>Save</button>
+      ${canRestart ? `<button class="btn btn--primary" type="button" data-restart>${icon('refresh')} Apply & restart</button>` : ''}`,
+    onMount(box, close) {
+      box.querySelectorAll('[data-set]').forEach((b) =>
+        b.addEventListener('click', () => {
+          const opt = m.settings.find((x) => x.id === b.dataset.set);
+          const o = opt?.options[Number(b.dataset.k)];
+          if (!o) return;
+          draft[opt.id] = o.v;
+          b.parentElement.querySelectorAll('[data-set]').forEach((x) => x.setAttribute('aria-checked', String(x === b)));
+          haptic();
+        })
+      );
+      box.querySelector('[data-save]')?.addEventListener('click', () => {
+        saveSettings(m.id, { ...draft });
+        close();
+        toast(atTable ? 'Saved — used from the next game.' : 'Settings saved.', 'success');
+      });
+      box.querySelector('[data-restart]')?.addEventListener('click', () => {
+        saveSettings(m.id, { ...draft });
+        close();
+        restartWithSettings();
+      });
+    }
+  });
+}
+
+function restartWithSettings() {
+  const s = session;
+  if (!s) return;
+  if (s.mode === 'remote') {
+    if (s.seat !== 0) return;
+    const round = s.room?.round || 0;
+    rooms
+      .restart(s.code, freshState(s.game, round, s.state), (s.seq || 0) + 1, round)
+      .then(() => toast('New game with the new rules.', 'success'))
+      .catch((err) => toast(roomError(err, 'Could not restart the game.'), 'error', 6000));
+    return;
+  }
+  clearTimers();
+  s.state = freshState(s.game, s.round, s.state);
+  s.seq = (s.seq || 0) + 1;
+  s.finishedAt = null;
+  paintBoard();
+  paintRail();
+  paintStatus();
+  tick();
+  toast('New game with the new rules.', 'success');
+}
+
 /* =========================================================
    Camera & microphone
    ========================================================= */
 function startCall() {
   const s = session;
   if (!s || s.call || s.mode !== 'remote' || !canCall()) return;
+  s.joinSeen = s.room?.guestJoin || s.room?.guestUid || '';
 
   s.call = createCall({
     code: s.code,
     seat: s.seat,
     onRemote: (stream) => {
       const v = q('[data-vid-remote]');
-      if (v && v.srcObject !== stream) v.srcObject = stream;
+      if (!v) return;
+      // Re-attach when the set of tracks changes, so Safari picks up new lanes too.
+      const sig = stream.getTracks().map((t) => t.id).join(',');
+      if (v.srcObject !== stream || v.dataset.sig !== sig) {
+        v.dataset.sig = sig;
+        v.srcObject = null;
+        v.srcObject = stream;
+      }
+      if (sig) playRemote();
       syncDock();
     },
     onLocal: (stream) => {
       const v = q('[data-vid-local]');
-      if (v) v.srcObject = stream;
+      if (v) {
+        v.srcObject = stream;
+        v.play?.().catch(() => {});
+      }
       syncDock();
     },
     onStatus: (state) => {
       if (session) session.status = state;
       syncDock();
     },
-    onError: () => toast('The video link could not be opened.', 'error')
+    onError: (err) => toast(roomError(err, 'The video link could not be opened.'), 'error')
   });
 
   s.call.start();
+}
+
+/** Start the friend's audio/video; browsers may insist on a tap first. */
+function playRemote() {
+  const s = session;
+  const v = q('[data-vid-remote]');
+  if (!s || !v?.srcObject) return;
+  v.muted = false;
+  const p = v.play?.();
+  if (!p?.then) return;
+  p.then(() => {
+    if (session !== s) return;
+    s.soundBlocked = false;
+    const btn = q('[data-sound]');
+    if (btn) btn.hidden = true;
+  }).catch((err) => {
+    if (session !== s || err?.name !== 'NotAllowedError') return;
+    s.soundBlocked = true;
+    const btn = q('[data-sound]');
+    if (btn) btn.hidden = false;
+  });
+}
+
+function recall() {
+  const s = session;
+  if (!s?.call) { toast('Waiting for your friend to arrive.', 'info'); return; }
+  s.call.reconnect();
+  s.status = 'connecting';
+  syncDock();
+  toast('Reconnecting voice & video…', 'info');
 }
 
 async function toggleDevice(kind) {
@@ -10511,7 +13846,7 @@ return Object.freeze({ meta, unmount, render });
   })();
 
   /* ===== js/views/prayer.js ===== */
-  const __m35 = (function () {
+  const __m43 = (function () {
 const { esc, ymd, today, addDays, pct, haptic } = __m1;
 const { icon } = __m3;
 const { ring, animateProgress, toast, confetti, confirmDialog } = __m2;
@@ -10857,7 +14192,7 @@ return Object.freeze({ meta, render });
   })();
 
   /* ===== js/quran.js ===== */
-  const __m37 = (function () {
+  const __m45 = (function () {
 const { esc } = __m1;
 const { icon } = __m3;
 const { navigate, currentPath } = __m6;
@@ -11341,13 +14676,13 @@ return Object.freeze({ RECITERS, TAFSIRS, qprefs, saveQprefs, isMarked, toggleMa
   })();
 
   /* ===== js/views/quran.js ===== */
-  const __m36 = (function () {
+  const __m44 = (function () {
 const { esc, debounce } = __m1;
 const { icon } = __m3;
 const { toast } = __m2;
 const { currentQuery, navigate } = __m6;
 const { isOpen: isPaletteOpen } = __m12;
-const { RECITERS, TAFSIRS, BASMALA, qprefs, saveQprefs, surahList, surahText, surahTafsir, player, arNum, plainArabic, isMarked, toggleMark, tafsirOf, reciterOf } = __m37;
+const { RECITERS, TAFSIRS, BASMALA, qprefs, saveQprefs, surahList, surahText, surahTafsir, player, arNum, plainArabic, isMarked, toggleMark, tafsirOf, reciterOf } = __m45;
 /**
  * LifeFlow — Qur'an: read and listen at the same time.
  *
@@ -11984,7 +15319,7 @@ return Object.freeze({ meta, render, unmount });
   })();
 
   /* ===== js/views/notes.js ===== */
-  const __m38 = (function () {
+  const __m46 = (function () {
 const { esc, toMillis, timeAgo, debounce, ymd } = __m1;
 const { icon } = __m3;
 const { modal, toast, confirmDialog } = __m2;
@@ -12172,7 +15507,7 @@ return Object.freeze({ meta, render });
   })();
 
   /* ===== js/views/archive.js ===== */
-  const __m39 = (function () {
+  const __m47 = (function () {
 const { esc, fmtMoney, today, pct } = __m1;
 const { icon } = __m3;
 const { ring, animateProgress } = __m2;
@@ -12463,7 +15798,7 @@ return Object.freeze({ meta, render });
   })();
 
   /* ===== js/views/profile.js ===== */
-  const __m40 = (function () {
+  const __m48 = (function () {
 const { esc, initials, downloadJSON, toMillis, timeAgo } = __m1;
 const { icon } = __m3;
 const { theme, modal, toast, confirmDialog, withLoading, animateProgress } = __m2;
@@ -13188,19 +16523,19 @@ const { initPalette, isOpen: isPaletteOpen } = __m12;
 const { renderLanding, renderLogin, renderSignup, renderForgot, hidePublic } = __m15;
 const { initShell, showApp, mountPage, unmountPage } = __m16;
 const dashboard = __m17;
-const tasks = __m26;
-const calendarPage = __m27;
-const finance = __m28;
-const purchases = __m29;
-const goals = __m30;
-const habits = __m31;
-const games = __m32;
-const prayer = __m35;
-const quran = __m36;
-const { player: quranPlayer } = __m37;
-const notes = __m38;
-const archive = __m39;
-const profile = __m40;
+const tasks = __m34;
+const calendarPage = __m35;
+const finance = __m36;
+const purchases = __m37;
+const goals = __m38;
+const habits = __m39;
+const games = __m40;
+const prayer = __m43;
+const quran = __m44;
+const { player: quranPlayer } = __m45;
+const notes = __m46;
+const archive = __m47;
+const profile = __m48;
 /**
  * LifeFlow — application bootstrap.
  */

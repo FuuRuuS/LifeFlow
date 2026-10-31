@@ -22,6 +22,35 @@ let rootEl = null;
 let lastQuery = '';
 const levels = {}; // remembered difficulty per game
 
+/* Per-game settings, remembered on this device. */
+const SETTINGS_KEY = 'lf:game-settings';
+let chosen = loadSettings();
+
+function loadSettings() {
+  try {
+    const v = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
+    return v && typeof v === 'object' ? v : {};
+  } catch {
+    return {};
+  }
+}
+
+/** The saved choices for a game, each checked against the options it offers. */
+function settingsFor(game) {
+  const saved = chosen[game.meta.id];
+  const out = {};
+  for (const opt of game.meta.settings || []) {
+    const v = saved && typeof saved === 'object' ? saved[opt.id] : undefined;
+    out[opt.id] = opt.options.some((o) => o.v === v) ? v : opt.def;
+  }
+  return out;
+}
+
+function saveSettings(gameId, values) {
+  chosen = { ...chosen, [gameId]: values };
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(chosen)); } catch { /* private mode */ }
+}
+
 const q = (sel) => rootEl?.querySelector(sel);
 const myName = () =>
   store.state.profile?.name || store.state.user?.displayName || (store.state.user?.email || 'You').split('@')[0];
@@ -77,6 +106,8 @@ function readQuery() {
   const params = currentQuery();
   const stamp = `${params.room || ''}|${params.play || ''}`;
   if (!stamp || stamp === '|' || stamp === lastQuery) return;
+  // Signed-in state may still be arriving — try again on the next paint.
+  if (params.room && !store.state.uid) return;
   lastQuery = stamp;
   if (params.room) joinByCode(params.room);
   else if (params.play && gameById(params.play)) startSolo(params.play);
@@ -170,6 +201,7 @@ function gameCard(game, i) {
             ? `<button class="btn btn--primary" type="button" data-solo="${m.id}">${icon('users')} Play here together</button>`
             : `<button class="btn btn--primary" type="button" data-solo="${m.id}">${icon('bot')} Play the computer</button>`}
           <button class="btn btn--ghost" type="button" data-invite="${m.id}">${icon('link')} Play online</button>
+          ${m.settings?.length ? `<button class="iconbtn gcard__cog" type="button" data-settings="${m.id}" aria-label="${esc(m.title)} settings" title="Settings">${icon('settings')}</button>` : ''}
         </div>
       </div>
     </article>`;
@@ -211,6 +243,13 @@ function wireLobby() {
     b.addEventListener('click', () => host(b.dataset.invite, b))
   );
 
+  rootEl.querySelectorAll('[data-settings]').forEach((b) =>
+    b.addEventListener('click', () => {
+      const game = gameById(b.dataset.settings);
+      if (game) showSettings(game, false);
+    })
+  );
+
   const form = q('[data-join-form]');
   form?.addEventListener('submit', (e) => {
     e.preventDefault();
@@ -235,7 +274,7 @@ function startSolo(gameId) {
     seat: 0,
     round: 0,
     names: [myName(), game.meta.local ? partnerName : computerName(game, levels[gameId] || 'even')],
-    state: game.create(),
+    state: game.create(settingsFor(game)),
     timers: []
   };
   repaint();
@@ -257,13 +296,13 @@ async function host(gameId, button) {
   button?.classList.add('is-loading');
   try {
     const level = levels[gameId] || 'even';
-    const state = game.create();
+    const state = game.create(settingsFor(game));
     const code = await rooms.createRoom({ gameId, level, state });
     openRoom({ code, game, seat: 0, state, level });
     showInvite(code, true);
   } catch (err) {
     console.warn('[arcade] host', err);
-    toast(err.message || 'Could not open the room.', 'error');
+    toast(roomError(err, 'Could not open the room.'), 'error', 6000);
   } finally {
     button?.classList.remove('is-loading');
   }
@@ -282,9 +321,18 @@ async function joinByCode(rawCode) {
     toast(seat === 1 ? 'You are in — good luck.' : 'Back at your table.', 'success');
   } catch (err) {
     console.warn('[arcade] join', err);
-    toast(err.message || 'Could not join that game.', 'error');
+    toast(roomError(err, 'Could not join that game.'), 'error', 6000);
     navigate('/games', { replace: true });
   }
+}
+
+/** Turn Firestore failures into something a player can act on. */
+function roomError(err, fallback) {
+  if (err?.code === 'permission-denied') {
+    return 'Online play is blocked by the database rules. Publish firestore.rules (firebase deploy --only firestore:rules).';
+  }
+  if (err?.code === 'unavailable') return 'You seem to be offline. Check the connection and try again.';
+  return err?.message || fallback;
 }
 
 function openRoom({ code, game, seat, state, level, room }) {
@@ -339,8 +387,15 @@ function onRoomChange(data) {
   syncDock();
   paintChat(data.chat || []);
 
-  // Both seated: open the line.
-  if (data.guestUid && !s.call) startCall();
+  // Both seated: open the line. A new arrival (or a rejoin after a reload)
+  // gets a brand-new connection from the host.
+  const join = data.guestUid ? data.guestJoin || data.guestUid : '';
+  if (join) {
+    if (!s.call) startCall();
+    else if (s.seat === 0 && join !== s.joinSeen) s.call.reconnect();
+    s.joinSeen = join;
+  }
+
   if (data.guestUid && !wasSeated && s.seat === 0) toast(`${data.guest?.name || 'Your friend'} joined.`, 'success');
   if (!data.guestUid && wasSeated && s.seat === 0) toast('Your friend stepped away.', 'info');
 
@@ -350,15 +405,15 @@ function onRoomChange(data) {
     const round = (data.round || 0) + 1;
     s.dealing = true;
     rooms
-      .restart(s.code, freshState(s.game, round), (data.seq || 0) + 1, round)
+      .restart(s.code, freshState(s.game, round, s.state), (data.seq || 0) + 1, round)
       .catch(() => {})
       .finally(() => { if (session === s) s.dealing = false; });
   }
 }
 
-function onRoomGone() {
+function onRoomGone(err) {
   if (!session || session.mode !== 'remote') return;
-  toast('The game was closed.', 'info');
+  toast(err ? roomError(err, 'Lost the connection to the game.') : 'The game was closed.', err ? 'error' : 'info', err ? 6000 : 3000);
   const s = session;
   teardown({ leaveTable: false });
   if (s.seat === 1) navigate('/games', { replace: true });
@@ -419,7 +474,7 @@ function commit(move) {
   if (s.mode === 'remote') {
     rooms.pushState(s.code, { state: next, outcome: out.over ? out : null, seq: s.seq }).catch((err) => {
       console.warn('[arcade] push', err);
-      toast('That move did not reach your friend.', 'error');
+      toast(err?.code === 'permission-denied' ? roomError(err) : 'That move did not reach your friend.', 'error');
     });
   }
 
@@ -472,8 +527,11 @@ function finish(out) {
   }
 }
 
-function freshState(game, round) {
-  const st = game.create();
+/** A new game with the saved settings, keeping the decks the players picked last time. */
+function freshState(game, round, prev) {
+  const opts = settingsFor(game);
+  if (Array.isArray(prev?.cats)) opts.cats = prev.cats;
+  const st = game.create(opts);
   if (game.meta.alternate !== false) st.turn = round % 2;
   return st;
 }
@@ -487,7 +545,7 @@ function newRound() {
     return;
   }
   s.round += 1;
-  s.state = freshState(s.game, s.round);
+  s.state = freshState(s.game, s.round, s.state);
   s.seq = (s.seq || 0) + 1;
   s.finishedAt = null;
   paintBoard();
@@ -523,6 +581,7 @@ function tableHtml() {
         </div>
         <div class="arcade__tools">
           ${remote ? `<button class="btn btn--ghost btn--sm" type="button" data-share>${icon('link')} Invite</button>` : ''}
+          ${m.settings?.length && (!remote || s.seat === 0) ? `<button class="iconbtn" type="button" data-table-settings aria-label="Game settings" title="Settings">${icon('settings')}</button>` : ''}
           <button class="iconbtn" type="button" data-rules aria-label="How to play">${icon('info')}</button>
         </div>
       </header>
@@ -707,7 +766,12 @@ function dockHtml() {
           <span class="vbtn__on">${icon('mic')}</span><span class="vbtn__off">${icon('micOff')}</span>
           <span class="vbtn__label">Mic</span>
         </button>
+        <button class="vbtn" type="button" data-recall ${supported ? '' : 'disabled'} title="Reconnect voice &amp; video">
+          <span class="vbtn__on">${icon('refresh')}</span><span class="vbtn__off">${icon('refresh')}</span>
+          <span class="vbtn__label">Reconnect</span>
+        </button>
       </div>
+      <button class="btn btn--primary btn--block vdock__sound" type="button" data-sound hidden>${icon('mic')} Tap to hear your friend</button>
       <p class="vdock__note fs-xs t-mute">Mic alone is a voice call; add the camera for video. Switch either whenever you like — the game keeps running.</p>
     </section>`;
 }
@@ -836,9 +900,12 @@ function wireTable() {
   const table = q('[data-arcade-root]');
   table?.addEventListener('click', (e) => {
     const t = e.target;
+    // Any tap counts as permission to play the friend's audio, if the browser held it back.
+    if (session?.mode === 'remote' && session.soundBlocked) playRemote();
     if (t.closest('[data-exit]')) { leave(); return; }
     if (t.closest('[data-again]')) { newRound(); return; }
     if (t.closest('[data-rules]')) { showRules(); return; }
+    if (t.closest('[data-table-settings]')) { showSettings(session.game, true); return; }
     if (t.closest('[data-share]')) { showInvite(session.code, false); return; }
     if (t.closest('[data-invite-here]')) { host(session.game.meta.id); return; }
 
@@ -856,6 +923,8 @@ function wireTable() {
 
     if (t.closest('[data-cam]')) { toggleDevice('cam'); return; }
     if (t.closest('[data-mic]')) { toggleDevice('mic'); return; }
+    if (t.closest('[data-recall]')) { recall(); return; }
+    if (t.closest('[data-sound]')) { playRemote(); return; }
 
     const react = t.closest('[data-react]');
     if (react) { say(react.dataset.react, 'react'); return; }
@@ -964,34 +1033,162 @@ function showRules() {
   });
 }
 
+/** Pick the game's options. At the table the host (or a solo player) can restart with them. */
+function showSettings(game, atTable) {
+  const m = game.meta;
+  const draft = settingsFor(game);
+  const s = session;
+  const canRestart = atTable && s && s.game === game && (s.mode === 'solo' || s.seat === 0);
+
+  modal({
+    title: `${m.emoji} ${m.title} — settings`,
+    body: `
+      <div class="gset">
+        ${m.settings
+          .map(
+            (opt) => `
+          <fieldset class="gset__group">
+            <legend class="gset__label">${esc(opt.label)}</legend>
+            <div class="gset__opts" role="radiogroup" aria-label="${esc(opt.label)}">
+              ${opt.options
+                .map(
+                  (o, k) =>
+                    `<button class="gset__opt" type="button" role="radio" data-set="${esc(opt.id)}" data-k="${k}" aria-checked="${o.v === draft[opt.id]}">${esc(o.label)}</button>`
+                )
+                .join('')}
+            </div>
+          </fieldset>`
+          )
+          .join('')}
+      </div>
+      <p class="fs-sm t-dim">${
+        atTable
+          ? canRestart
+            ? (s.mode === 'remote' ? 'Both players share these rules. Restart to use them now, or save them for the next game.' : 'Restart to use them now, or save them for the next game.')
+            : 'They apply from the next game.'
+          : 'Saved on this device and used every time you start this game.'
+      }</p>`,
+    footer: `
+      <button class="btn btn--ghost" type="button" data-save>Save</button>
+      ${canRestart ? `<button class="btn btn--primary" type="button" data-restart>${icon('refresh')} Apply & restart</button>` : ''}`,
+    onMount(box, close) {
+      box.querySelectorAll('[data-set]').forEach((b) =>
+        b.addEventListener('click', () => {
+          const opt = m.settings.find((x) => x.id === b.dataset.set);
+          const o = opt?.options[Number(b.dataset.k)];
+          if (!o) return;
+          draft[opt.id] = o.v;
+          b.parentElement.querySelectorAll('[data-set]').forEach((x) => x.setAttribute('aria-checked', String(x === b)));
+          haptic();
+        })
+      );
+      box.querySelector('[data-save]')?.addEventListener('click', () => {
+        saveSettings(m.id, { ...draft });
+        close();
+        toast(atTable ? 'Saved — used from the next game.' : 'Settings saved.', 'success');
+      });
+      box.querySelector('[data-restart]')?.addEventListener('click', () => {
+        saveSettings(m.id, { ...draft });
+        close();
+        restartWithSettings();
+      });
+    }
+  });
+}
+
+function restartWithSettings() {
+  const s = session;
+  if (!s) return;
+  if (s.mode === 'remote') {
+    if (s.seat !== 0) return;
+    const round = s.room?.round || 0;
+    rooms
+      .restart(s.code, freshState(s.game, round, s.state), (s.seq || 0) + 1, round)
+      .then(() => toast('New game with the new rules.', 'success'))
+      .catch((err) => toast(roomError(err, 'Could not restart the game.'), 'error', 6000));
+    return;
+  }
+  clearTimers();
+  s.state = freshState(s.game, s.round, s.state);
+  s.seq = (s.seq || 0) + 1;
+  s.finishedAt = null;
+  paintBoard();
+  paintRail();
+  paintStatus();
+  tick();
+  toast('New game with the new rules.', 'success');
+}
+
 /* =========================================================
    Camera & microphone
    ========================================================= */
 function startCall() {
   const s = session;
   if (!s || s.call || s.mode !== 'remote' || !canCall()) return;
+  s.joinSeen = s.room?.guestJoin || s.room?.guestUid || '';
 
   s.call = createCall({
     code: s.code,
     seat: s.seat,
     onRemote: (stream) => {
       const v = q('[data-vid-remote]');
-      if (v && v.srcObject !== stream) v.srcObject = stream;
+      if (!v) return;
+      // Re-attach when the set of tracks changes, so Safari picks up new lanes too.
+      const sig = stream.getTracks().map((t) => t.id).join(',');
+      if (v.srcObject !== stream || v.dataset.sig !== sig) {
+        v.dataset.sig = sig;
+        v.srcObject = null;
+        v.srcObject = stream;
+      }
+      if (sig) playRemote();
       syncDock();
     },
     onLocal: (stream) => {
       const v = q('[data-vid-local]');
-      if (v) v.srcObject = stream;
+      if (v) {
+        v.srcObject = stream;
+        v.play?.().catch(() => {});
+      }
       syncDock();
     },
     onStatus: (state) => {
       if (session) session.status = state;
       syncDock();
     },
-    onError: () => toast('The video link could not be opened.', 'error')
+    onError: (err) => toast(roomError(err, 'The video link could not be opened.'), 'error')
   });
 
   s.call.start();
+}
+
+/** Start the friend's audio/video; browsers may insist on a tap first. */
+function playRemote() {
+  const s = session;
+  const v = q('[data-vid-remote]');
+  if (!s || !v?.srcObject) return;
+  v.muted = false;
+  const p = v.play?.();
+  if (!p?.then) return;
+  p.then(() => {
+    if (session !== s) return;
+    s.soundBlocked = false;
+    const btn = q('[data-sound]');
+    if (btn) btn.hidden = true;
+  }).catch((err) => {
+    if (session !== s || err?.name !== 'NotAllowedError') return;
+    s.soundBlocked = true;
+    const btn = q('[data-sound]');
+    if (btn) btn.hidden = false;
+  });
+}
+
+function recall() {
+  const s = session;
+  if (!s?.call) { toast('Waiting for your friend to arrive.', 'info'); return; }
+  s.call.reconnect();
+  s.status = 'connecting';
+  syncDock();
+  toast('Reconnecting voice & video…', 'info');
 }
 
 async function toggleDevice(kind) {

@@ -379,7 +379,7 @@ function gamesCard() {
         <h3 class="card__title">${icon('gamepad')} Take a break</h3>
         <button class="btn btn--xs btn--ghost" data-go="/games">Open ${icon('arrowRight')}</button>
       </div>
-      <p class="fs-sm t-dim games-card__sub">Ten quiet minutes. Play the computer, or send a friend a link.</p>
+      <p class="fs-sm t-dim games-card__sub">Party games, quizzes, cards and boards — alone, side by side, or online.</p>
       <div class="games-card__tiles">
         ${GAMES.map(
           (g, i) => `

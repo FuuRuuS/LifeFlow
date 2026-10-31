@@ -42,6 +42,20 @@ function me() {
   };
 }
 
+/**
+ * Identifies this browser tab, so one account can sit on both sides of a table
+ * (a phone and a laptop, say) without being mistaken for the host twice.
+ */
+const TAB = (() => {
+  try {
+    let id = sessionStorage.getItem('lf:tab');
+    if (!id) { id = newCode(8); sessionStorage.setItem('lf:tab', id); }
+    return id;
+  } catch {
+    return newCode(8);
+  }
+})();
+
 /* ------------------------------ lifecycle ------------------------------ */
 export async function createRoom({ gameId, level, state }) {
   const who = me();
@@ -53,7 +67,10 @@ export async function createRoom({ gameId, level, state }) {
     gameId,
     level: level || 'even',
     hostUid: who.uid,
+    hostTab: TAB,
     guestUid: null,
+    guestTab: null,
+    guestJoin: null,
     host: { name: who.name },
     guest: null,
     state,
@@ -80,17 +97,21 @@ export async function joinRoom(code) {
   if (!snap.exists()) throw new Error('That game could not be found — the link may have expired.');
 
   const data = snap.data();
-  if (data.hostUid === who.uid) return { seat: 0, data };
+  // The host's own tab (or an older room without tab ids) goes back to seat one.
+  if (data.hostUid === who.uid && (!data.hostTab || data.hostTab === TAB)) return { seat: 0, data };
   if (data.guestUid && data.guestUid !== who.uid) throw new Error('This game already has two players.');
 
-  if (data.guestUid !== who.uid) {
-    await updateDoc(roomRef(code), {
-      guestUid: who.uid,
-      guest: { name: who.name },
-      updatedAt: serverTimestamp()
-    });
-  }
-  return { seat: 1, data };
+  // Every arrival gets a fresh token — the host reopens the call when it changes.
+  const seated = {
+    guestUid: who.uid,
+    guestTab: TAB,
+    guestJoin: newCode(8),
+    guest: { name: who.name },
+    offer: null,
+    answer: null
+  };
+  await updateDoc(roomRef(code), { ...seated, updatedAt: serverTimestamp() });
+  return { seat: 1, data: { ...data, ...seated } };
 }
 
 export function watchRoom(code, onChange, onGone) {
@@ -192,6 +213,8 @@ export async function leaveRoom(code, seat) {
     } else {
       await updateDoc(roomRef(code), {
         guestUid: null,
+        guestTab: null,
+        guestJoin: null,
         guest: null,
         offer: null,
         answer: null,

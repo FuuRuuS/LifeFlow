@@ -47,6 +47,23 @@ export const APP = {
   version: '1.0.0'
 };
 
+/**
+ * Voice & video in Games.
+ *
+ * Google's public STUN servers are always used and connect most home Wi-Fi.
+ * Phones on 4G/5G and strict office/school networks usually also need a TURN
+ * relay. Add one here, using the credentials from your TURN provider
+ * (for example a free Metered.ca or Cloudflare Calls account, or your own coturn):
+ *
+ *   iceServers: [
+ *     { urls: ['turn:YOUR-TURN-HOST:80', 'turn:YOUR-TURN-HOST:443?transport=tcp'],
+ *       username: 'YOUR-USERNAME', credential: 'YOUR-CREDENTIAL' }
+ *   ]
+ */
+export const RTC = {
+  iceServers: []
+};
+
 export const CURRENCIES = [
   { code: 'USD', symbol: '$' },
   { code: 'TND', symbol: 'dt' },
